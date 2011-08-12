@@ -1,0 +1,6 @@
+dependencies/
+lib_managed/
+project/boot/
+project/build/target/
+tags
+target/
