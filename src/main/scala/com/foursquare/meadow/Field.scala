@@ -4,7 +4,12 @@ import com.mongodb.DBObject
 
 import com.foursquare.meadow.Implicits._
 
-abstract class ValueContainer[T](initFrom: Option[T]) {
+sealed abstract class MaybeRequired
+sealed abstract class Required extends MaybeRequired
+sealed abstract class NotRequired extends MaybeRequired
+
+class ValueContainer[T, Reqd <: MaybeRequired](initFrom: Option[T],
+                                               behaviorWhenUnset: Option[T] => T) {
   private var _origValueOpt: Option[T] = initFrom
   private var _valueOpt: Option[T] = initFrom
   private var _dirty = false
@@ -20,13 +25,11 @@ abstract class ValueContainer[T](initFrom: Option[T]) {
   def getOpt: Option[T] = _valueOpt 
   def set(t: T): Unit = set(Some(t))
   def isDirty: Boolean = _dirty
-}
-
-class OptionalValueContainer[T](initFrom: Option[T]) extends ValueContainer[T](initFrom) {
   def unset: Unit = set(None)
   def isDefined: Boolean = getOpt.isDefined 
-}
 
-class RequiredValueContainer[T](initFrom: Option[T], defaultVal: T) extends ValueContainer(initFrom) {
-  def get: T = getOpt.getOrElse(defaultVal)
+  // Only required fields can use this method.
+  def get(implicit ev: Reqd =:= Required): T = {
+    behaviorWhenUnset(getOpt)
+  }
 }
