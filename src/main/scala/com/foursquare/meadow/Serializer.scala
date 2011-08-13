@@ -1,9 +1,13 @@
 package com.foursquare.meadow
 
 import com.foursquare.meadow.Implicits._
-import com.mongodb.BasicDBList
+
+import com.mongodb.BasicDBObject
+import java.util.Date
 import net.liftweb.common.Loggable
-import org.bson.types.ObjectId
+import org.bson.types.{BSONTimestamp, BasicBSONList, ObjectId}
+import org.bson.BSONObject
+import org.joda.time.DateTime
 
 abstract class Serializer[T] extends Loggable {
   def deserialize(any: Any): Option[T] = {
@@ -29,16 +33,16 @@ object Serializer {
 }
 
 
-class ListSerializer[EltType](eltSerializer: Serializer[EltType]) extends Serializer[List[EltType]] {
+case class ListSerializer[EltType](eltSerializer: Serializer[EltType]) extends Serializer[List[EltType]] {
   def parseFromAny(a: Any): Option[List[EltType]] = a match {
-    case l: BasicDBList => Some(
+    case l: BasicBSONList => Some(
       (for (i <- 0 until l.size()) yield eltSerializer.deserialize(l.get(i))).flatMap(x => x).toList
     )
     case _ => None
   }
-  def serialize(t: List[EltType]): Any = {
-    val list = new BasicDBList()
-    for (elt <- t) {
+  def serialize(toSerialize: List[EltType]): Any = {
+    val list = new BasicBSONList()
+    for (elt <- toSerialize) {
       list.add(eltSerializer.serialize(elt).asInstanceOf[AnyRef])
     }
     list
@@ -78,22 +82,27 @@ case object StringSerializer extends Serializer[String] {
   def serialize(t: String): Any = t
 }
 
-/*
-java.util.Date
-ObjectId
-byte[] / Binary
-BSONTimestamp
-Code / CodeWScope
-BasicDBObject
-List
+case object DateTimeSerializer extends Serializer[DateTime] {
+  def parseFromAny(a: Any) = a match {
+    case dt: DateTime => Some(dt)
+    case d: Date => Some(new DateTime(d.getTime()))
+    case bsonTime: BSONTimestamp => Some(new DateTime(bsonTime.getTime()))
+    case _ => None
+  }
+  def serialize(t: DateTime): Any = t.toDate
+}
 
+case class RecordSerializer[RecordType <: Record](recordDescriptor: RecordDescriptor[RecordType]) extends Serializer[RecordType] {
+  def parseFromAny(a: Any): Option[RecordType] = a match {
+    case dbo: BSONObject => Some(recordDescriptor.loadRecord(dbo))
+    case _ => None
+  }
 
-object DBObjectSerializer {
-  def apply(x: Option[T])(implicit m: Manifest[T]): DBObjectSerializer[T] = {
-    m.erasure match {
-      case _: classOf[Int] => IntSerializer
-      case _: classOf[String] => StringSerializer
-    }
+  def serialize(rec: RecordType): Any = {
+    recordDescriptor.serialize(rec)
   }
 }
-*/
+
+// Unsupported:
+// byte[] / Binary
+// Code / CodeWScope

@@ -1,13 +1,18 @@
 package com.foursquare.meadow
 
-import com.mongodb.{BasicDBObject, DBObject}
+import com.mongodb.BasicDBObject
+import org.bson.BSONObject
 import org.bson.types.ObjectId
+import org.joda.time.DateTime
 import scala.reflect.Manifest
 
-abstract class BaseDescriptor
+abstract class BaseFieldDescriptor {
+  def name: String
+  def serialize(container: BaseValueContainer): Option[Any]
+}
 
 object FieldDescriptor {
-  def extractValue[T](serializer: Serializer[T], src: DBObject, name: String): Option[T] = {
+  def extractValue[T](serializer: Serializer[T], src: BSONObject, name: String): Option[T] = {
     if (src.containsField(name)) {
       serializer.deserialize(src.get(name))
     } else None
@@ -15,21 +20,32 @@ object FieldDescriptor {
 }
 
 class FieldDescriptor[T, Reqd <: MaybeRequired](
-    val name: String,
+    override val name: String,
     val serializer: Serializer[T],
     val generatorOpt: Option[Generator[T]] = None,
-    val behaviorWhenUnset: Option[T] => T = ((x: Option[T]) => x.get)) extends BaseDescriptor {
+    val behaviorWhenUnset: Option[T] => T = ((x: Option[T]) => x.get)) extends BaseFieldDescriptor {
 
-  def extractFrom(src: DBObject): ValueContainer[T, Reqd] = {
-    new ValueContainer[T, Reqd](FieldDescriptor.extractValue(serializer,
-                                                             src,
-                                                             name),
-                                behaviorWhenUnset)
+  def extractFrom(src: BSONObject): ValueContainer[T, Reqd] = {
+    new ConcreteValueContainer(this,
+                               FieldDescriptor.extractValue(serializer,
+                                                            src,
+                                                            name),
+                               behaviorWhenUnset)
   }
   
   def createForNewRecord(): ValueContainer[T, Reqd] = {
-    new ValueContainer[T, Reqd](generatorOpt.map(_.generate()),
-                                behaviorWhenUnset)
+    new ConcreteValueContainer(this,
+                               generatorOpt.map(_.generate()),
+                               behaviorWhenUnset)
+  }
+  
+  override def serialize(container: BaseValueContainer): Option[Any] = container match {
+    // TODO(nsanch): due to type erasure this'll match anything
+    case vc: ValueContainer[T, Reqd] =>
+      if (vc.isDefined) {
+        vc.getOpt.map(serializer.serialize _)
+      } else None
+    case _ => None
   }
 
   def required(): FieldDescriptor[T, Required] = {
@@ -51,30 +67,43 @@ class FieldDescriptor[T, Reqd <: MaybeRequired](
 // - okay with nonexistence and provide a default value to return from get and getOpt
 }
 
-abstract class RecordDescriptor[RecordType] {
-  protected def createInstance(dbo: DBObject, newRecord: Boolean): RecordType
+abstract class RecordDescriptor[RecordType <: Record] {
+  protected def createInstance(dbo: BSONObject, newRecord: Boolean): RecordType
 
   final def createRecord: RecordType = createInstance(new BasicDBObject(), true)
-  final def loadRecord(dbo: DBObject): RecordType = {
+  final def loadRecord(dbo: BSONObject): RecordType = {
     createInstance(dbo, false)
+  }
+    
+  def serialize(rec: RecordType): BSONObject = {
+    val res = new BasicDBObject()
+    for (container <- rec.fields;
+         oneField <- container.descriptor.serialize(container)) {
+      res.put(container.descriptor.name, oneField) 
+    }
+    res
   }
 
   def objectIdField(name: String) = new FieldDescriptor[ObjectId, NotRequired](name, ObjectIdSerializer)
   def longField(name: String) = new FieldDescriptor[Long, NotRequired](name, LongSerializer)
   def intField(name: String) = new FieldDescriptor[Int, NotRequired](name, IntSerializer)
   def stringField(name: String) = new FieldDescriptor[String, NotRequired](name, StringSerializer)
-}
-
-abstract class Record(dbo: DBObject, newRecord: Boolean) {
-  def field[T, Reqd <: MaybeRequired](fd: FieldDescriptor[T, Reqd]): ValueContainer[T, Reqd] = {
-    if (newRecord) {
-      fd.extractFrom(dbo)
-    } else {
-      fd.createForNewRecord()
-    }
+  def dateTimeField(name: String) = new FieldDescriptor[DateTime, NotRequired](name, DateTimeSerializer)
+  def listField[T](name: String, elementSerializer: Serializer[T]) = {
+    new FieldDescriptor[List[T], NotRequired](name, ListSerializer(elementSerializer))
   }
 }
 
+abstract class Record(dbo: BSONObject, newRecord: Boolean) {
+  var fields: List[BaseValueContainer] = Nil
 
-//new ObjectIdField with RequiredField
-//new StringField with DefaultValuedField { def defaultVal = "" }
+  def field[T, Reqd <: MaybeRequired](fd: FieldDescriptor[T, Reqd]): ValueContainer[T, Reqd] = {
+    val container = (if (newRecord) {
+      fd.extractFrom(dbo)
+    } else {
+      fd.createForNewRecord()
+    })
+    fields = container :: fields
+    container
+  }
+}

@@ -11,9 +11,9 @@ class MeadowProject(info: ProjectInfo) extends DefaultProject(info) {
   val liftCommon = "net.liftweb"       %% "lift-common"        % liftVer     % "compile" withSources()
   val mongo      = "org.mongodb"        % "mongo-java-driver"  % "2.5.3"                 withSources()
   val junit      = "junit"              %  "junit"             % "4.8.2"     % "test"    withSources()
-  val junitInterface = "com.novocode"   %  "junit-interface"     % "0.6"   % "test"
+  val junitInterface = "com.novocode"   %  "junit-interface"   % "0.6"   % "test"
+  val jodaTime     = "joda-time"        % "joda-time"          % "1.6"                       withSources()        
 
-  // ivy.xml generation
   def ivyPublishConfiguration = new DefaultPublishConfiguration("local", "release", true) {
     override def configurations = Some(List(Configurations.Compile,
                                             Configurations.Javadoc,
