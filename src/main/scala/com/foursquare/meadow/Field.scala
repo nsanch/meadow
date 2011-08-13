@@ -25,9 +25,9 @@ abstract class ValueContainer[T, Reqd <: MaybeRequired] extends BaseValueContain
   def get(implicit ev: Reqd =:= Required): T
 }
 
-class ConcreteValueContainer[T, Reqd <: MaybeRequired](val descriptor: FieldDescriptor[T, Reqd], 
+class ConcreteValueContainer[T, Reqd <: MaybeRequired](override val descriptor: FieldDescriptor[T, Reqd], 
                                                        initFrom: Option[T],
-                                                       behaviorWhenUnset: Option[T] => T)
+                                                       behaviorWhenUnset: Option[Option[T] => T])
     extends ValueContainer[T, Reqd] {
   private var _origValueOpt: Option[T] = initFrom
   private var _valueOpt: Option[T] = initFrom
@@ -41,15 +41,24 @@ class ConcreteValueContainer[T, Reqd <: MaybeRequired](val descriptor: FieldDesc
   }
   
   // Public interface
-  override def getOpt: Option[T] = _valueOpt 
+  override def getOpt: Option[T] = {
+    if (_valueOpt.isDefined) {
+      _valueOpt
+    } else if (behaviorWhenUnset.isDefined) {
+      // TODO(nsanch): not right when behavior is _.get. getOpt should return none.
+      behaviorWhenUnset.map(b => b(_valueOpt))
+    } else {
+      None
+    }
+  }
   override def set(t: T): Unit = set(Some(t))
   override def isDirty: Boolean = _dirty
   override def unset: Unit = set(None)
-  override def isDefined: Boolean = getOpt.isDefined 
+  override def isDefined: Boolean = _valueOpt.isDefined 
 
   // Only required fields can use this method.
   override def get(implicit ev: Reqd =:= Required): T = {
-    behaviorWhenUnset(getOpt)
+    behaviorWhenUnset.get(getOpt)
   }
 }
 

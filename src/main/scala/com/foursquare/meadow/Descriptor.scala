@@ -23,7 +23,7 @@ class FieldDescriptor[T, Reqd <: MaybeRequired](
     override val name: String,
     val serializer: Serializer[T],
     val generatorOpt: Option[Generator[T]] = None,
-    val behaviorWhenUnset: Option[T] => T = ((x: Option[T]) => x.get)) extends BaseFieldDescriptor {
+    val behaviorWhenUnset: Option[Option[T] => T] = None) extends BaseFieldDescriptor {
 
   def extractFrom(src: BSONObject): ValueContainer[T, Reqd] = {
     new ConcreteValueContainer(this,
@@ -48,12 +48,12 @@ class FieldDescriptor[T, Reqd <: MaybeRequired](
     case _ => None
   }
 
-  def required(): FieldDescriptor[T, Required] = {
-    new FieldDescriptor[T, Required](this.name, this.serializer, this.generatorOpt, this.behaviorWhenUnset) 
+  def required()(implicit ev: Reqd =:= NotRequired): FieldDescriptor[T, Required] = {
+    new FieldDescriptor[T, Required](this.name, this.serializer, this.generatorOpt, Some(_.get))
   }
 
-  def withDefaultValue(defaultVal: T): FieldDescriptor[T, Required] = {
-    new FieldDescriptor[T, Required](this.name, this.serializer, this.generatorOpt, _.getOrElse(defaultVal))
+  def withDefaultValue(defaultVal: T)(implicit ev: Reqd =:= NotRequired): FieldDescriptor[T, Required] = {
+    new FieldDescriptor[T, Required](this.name, this.serializer, this.generatorOpt, Some(_.getOrElse(defaultVal)))
   }
 
   def withGenerator(generator: Generator[T]): FieldDescriptor[T, Reqd] = {
@@ -92,6 +92,9 @@ abstract class RecordDescriptor[RecordType <: Record] {
   def listField[T](name: String, elementSerializer: Serializer[T]) = {
     new FieldDescriptor[List[T], NotRequired](name, ListSerializer(elementSerializer))
   }
+  def recordField[R <: Record](name: String, desc: RecordDescriptor[R]) = {
+    new FieldDescriptor[R, NotRequired](name, RecordSerializer(desc))
+  }
 }
 
 abstract class Record(dbo: BSONObject, newRecord: Boolean) {
@@ -99,9 +102,9 @@ abstract class Record(dbo: BSONObject, newRecord: Boolean) {
 
   def field[T, Reqd <: MaybeRequired](fd: FieldDescriptor[T, Reqd]): ValueContainer[T, Reqd] = {
     val container = (if (newRecord) {
-      fd.extractFrom(dbo)
-    } else {
       fd.createForNewRecord()
+    } else {
+      fd.extractFrom(dbo)
     })
     fields = container :: fields
     container
