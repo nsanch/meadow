@@ -24,6 +24,7 @@ class Venue protected(dbo: BSONObject, newRecord: Boolean) extends Record(dbo, n
 
 object VenueDescriptor extends RecordDescriptor[Venue] {
   override protected def createInstance(dbo: BSONObject, newRecord: Boolean) = new Venue(dbo, newRecord)
+  override protected def mongoLocation = MongoLocation("test", "venues")
 
   val _id = objectIdField("_id").required().withGenerator(ObjectIdGenerator)
   val name = stringField("name").required()
@@ -31,6 +32,7 @@ object VenueDescriptor extends RecordDescriptor[Venue] {
 
 object CheckinDescriptor extends RecordDescriptor[Checkin] {
   override protected def createInstance(dbo: BSONObject, newRecord: Boolean) = new Checkin(dbo, newRecord)
+  override protected def mongoLocation = MongoLocation("test", "checkins")
 
   val _id = objectIdField("_id").required().withGenerator(ObjectIdGenerator)
   val userid = longField("uid").withExtensions[LegacyFKExtension[User]](vc => new LegacyFKExtension(vc, UserDescriptor))
@@ -68,6 +70,7 @@ class User protected(dbo: BSONObject, newRecord: Boolean) extends Record(dbo, ne
 
 object UserDescriptor extends RecordDescriptor[User] {
   override protected def createInstance(dbo: BSONObject, newRecord: Boolean) = new User(dbo, newRecord)
+  override protected def mongoLocation = MongoLocation("test", "users")
 
   val lastCheckin = recordField("c_obj", CheckinDescriptor)
 }
@@ -96,6 +99,7 @@ class MeadowTest {
   def customField: Unit = {
     object CustomizedRecDescriptor extends RecordDescriptor[CustomizedRec] {
       override protected def createInstance(dbo: BSONObject, newRecord: Boolean) = new CustomizedRec(dbo, newRecord)
+      override protected def mongoLocation = MongoLocation("test", "customize")
 
       val customLogicField = stringField("custom").withExtensions[CustomExtension](vc => new CustomExtension(vc))
     }

@@ -3,4 +3,6 @@ lib_managed/
 project/boot/
 project/build/target/
 tags
+tags.old
 target/
+mongo-testdb

@@ -1,6 +1,6 @@
 package com.foursquare.meadow
 
-import com.mongodb.BasicDBObject
+import com.mongodb.{BasicDBObject, DBCollection, DBObject, WriteConcern, BasicDBList}
 import org.bson.BSONObject
 import org.bson.types.ObjectId
 import org.joda.time.DateTime
@@ -102,21 +102,47 @@ abstract class BaseRecordDescriptor {
   def recordField[R <: Record](name: String, desc: RecordDescriptor[R]) = {
     FieldDescriptor[R](name, RecordSerializer(desc))
   }
+  
+  def save(r: Record): Unit
 }
+
+case class MongoLocation(db: String, collection: String)
 
 abstract class RecordDescriptor[RecordType <: Record] extends BaseRecordDescriptor {
   protected def createInstance(dbo: BSONObject, newRecord: Boolean): RecordType
+  protected def mongoLocation: MongoLocation
+  // TODO(nsanch): As much as possible, the mongo logic should move to another class.
+  def coll(): DBCollection = MongoConnector.mongo.getDB(mongoLocation.db).getCollection(mongoLocation.collection)
 
   final def createRecord: RecordType = createInstance(new BasicDBObject(), true)
   final def loadRecord(dbo: BSONObject): RecordType = createInstance(dbo, false)
     
-  def serialize(rec: RecordType): BSONObject = {
+  def serialize(rec: Record): DBObject = {
     val res = new BasicDBObject()
     for (container <- rec.fields;
          oneField <- container.serialize) {
       res.put(container.descriptor.name, oneField.v) 
     }
     res
+  }
+
+
+  def save(r: Record) = {
+    // is it better to do insert for new records? appears to work fine either way
+    coll().save(serialize(r), WriteConcern.NORMAL)
+  }
+
+  def findOne(id: ObjectId): Option[RecordType] = findAll(List(id)).headOption
+
+  def findAll(ids: List[ObjectId]): List[RecordType] = {
+    val idList = new BasicDBList()
+    ids.foreach(idList.add _)
+    val found = coll().find(new BasicDBObject("_id", new BasicDBObject("$in", idList))) 
+    val l = new MutableList[RecordType]()
+    while (found.hasNext()) {
+      l += loadRecord(found.next())
+    }
+    l.toList
   }
 }
 
@@ -132,5 +158,9 @@ abstract class Record(dbo: BSONObject, newRecord: Boolean) {
     })
     fields += container
     container
+  }
+
+  def save = {
+    descriptor.save(this)
   }
 }

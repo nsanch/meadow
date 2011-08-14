@@ -10,6 +10,7 @@ object TestEnum extends Enumeration {
 
 object SampleDescriptor extends RecordDescriptor[Sample] {
   override protected def createInstance(dbo: BSONObject, newRecord: Boolean) = new Sample(dbo, newRecord)
+  override protected def mongoLocation = MongoLocation("test", "sample")
 
   val _id = objectIdField("_id").required().withGenerator(ObjectIdGenerator)
   val int = intField("int")
