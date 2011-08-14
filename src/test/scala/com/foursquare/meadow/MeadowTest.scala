@@ -13,6 +13,9 @@ class LegacyFKExtension[R <: Record](vc: ExtendableValueContainer[Long, LegacyFK
 
 class FKExtension[R <: Record](vc: ExtendableValueContainer[ObjectId, FKExtension[R]],
                                desc: RecordDescriptor[R]) extends Extensions[ObjectId] {
+  // - obj method goes here
+  // - onChange clears the cached obj value
+  // - this and LegacyFKExtension should mix in the same trait
 }
 
 class Venue protected(dbo: BSONObject, newRecord: Boolean) extends Record(dbo, newRecord) {
