@@ -4,6 +4,7 @@ import com.mongodb.BasicDBObject
 import org.bson.BSONObject
 import org.bson.types.ObjectId
 import org.joda.time.DateTime
+import scala.collection.mutable.MutableList
 import scala.reflect.Manifest
 
 sealed abstract class UnsetBehavior[T] {
@@ -28,6 +29,12 @@ object FieldDescriptor {
     if (src.containsField(name)) {
       Some(serializer.deserialize(PhysicalType(src.get(name))))
     } else None
+  }
+
+  def apply[T](name: String, serializer: Serializer[T]) = {
+    new FieldDescriptor[T, NotRequired, NoExtensions[T]](name,
+                                                         serializer,
+                                                         _ => NoExtensions())
   }
 }
 
@@ -81,23 +88,19 @@ class FieldDescriptor[T, Reqd <: MaybeRequired, Ext <: Extensions[T]](
 // - okay with nonexistence and provide a default value to return from get and getOpt
 }
 
-class SimpleFieldDescriptor[T](name: String, serializer: Serializer[T])
-    extends FieldDescriptor[T, NotRequired, NoExtensions[T]](name,
-                                                             serializer,
-                                                             _ => NoExtensions())
-
-
 abstract class BaseRecordDescriptor {
-  def objectIdField(name: String) = new SimpleFieldDescriptor[ObjectId](name, ObjectIdSerializer)
-  def longField(name: String) = new SimpleFieldDescriptor[Long](name, LongSerializer)
-  def intField(name: String) = new SimpleFieldDescriptor[Int](name, IntSerializer)
-  def stringField(name: String) = new SimpleFieldDescriptor[String](name, StringSerializer)
-  def dateTimeField(name: String) = new SimpleFieldDescriptor[DateTime](name, DateTimeSerializer)
+  def objectIdField(name: String) = FieldDescriptor(name, ObjectIdSerializer)
+  def booleanField(name: String) = FieldDescriptor(name, BooleanSerializer)
+  def intField(name: String) = FieldDescriptor(name, IntSerializer)
+  def longField(name: String) = FieldDescriptor(name, LongSerializer)
+  def doubleField(name: String) = FieldDescriptor(name, DoubleSerializer)
+  def stringField(name: String) = FieldDescriptor(name, StringSerializer)
+  def dateTimeField(name: String) = FieldDescriptor(name, DateTimeSerializer)
   def listField[T](name: String, elementSerializer: Serializer[T]) = {
-    new SimpleFieldDescriptor[List[T]](name, ListSerializer(elementSerializer))
+    FieldDescriptor[List[T]](name, ListSerializer(elementSerializer))
   }
   def recordField[R <: Record](name: String, desc: RecordDescriptor[R]) = {
-    new SimpleFieldDescriptor[R](name, RecordSerializer(desc))
+    FieldDescriptor[R](name, RecordSerializer(desc))
   }
 }
 
@@ -119,7 +122,7 @@ abstract class RecordDescriptor[RecordType <: Record] extends BaseRecordDescript
 
 abstract class Record(dbo: BSONObject, newRecord: Boolean) {
   def descriptor: BaseRecordDescriptor
-  var fields: List[BaseValueContainer] = Nil
+  var fields: MutableList[BaseValueContainer] = new MutableList()
 
   def build[T, Reqd <: MaybeRequired, Ext <: Extensions[T]](fd: FieldDescriptor[T, Reqd, Ext]): ValueContainer[T, Reqd, Ext] = {
     val container = (if (newRecord) {
@@ -127,7 +130,7 @@ abstract class Record(dbo: BSONObject, newRecord: Boolean) {
     } else {
       fd.extractFrom(dbo)
     })
-    fields = container :: fields
+    fields += container
     container
   }
 }

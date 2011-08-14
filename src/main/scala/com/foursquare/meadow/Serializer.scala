@@ -5,9 +5,11 @@ import com.foursquare.meadow.Implicits._
 import com.mongodb.BasicDBObject
 import java.util.Date
 import net.liftweb.common.Loggable
-import org.bson.types.{BSONTimestamp, BasicBSONList, ObjectId}
+import org.bson.types.{BasicBSONList, ObjectId}
 import org.bson.BSONObject
 import org.joda.time.DateTime
+
+// TODO(nsanch): should all/some of these parse NullWrapper?
 
 abstract class Serializer[T] extends Loggable {
   def deserialize(any: PhysicalType): T = {
@@ -49,6 +51,14 @@ case object ObjectIdSerializer extends Serializer[ObjectId] {
   def serialize(t: ObjectId): PhysicalType = ObjectIdWrapper(t) 
 }
 
+case object BooleanSerializer extends Serializer[Boolean] {
+  protected def parseFromAny(a: PhysicalType): Option[Boolean] = a match {
+    case b: BooleanWrapper => Some(b.v)
+    case _ => None
+  }
+  def serialize(t: Boolean): PhysicalType = BooleanWrapper(t)
+}
+
 case object IntSerializer extends Serializer[Int] {
   protected def parseFromAny(a: PhysicalType): Option[Int] = a match {
     case i: IntWrapper => Some(i.v)
@@ -87,7 +97,6 @@ case object StringSerializer extends Serializer[String] {
 case object DateTimeSerializer extends Serializer[DateTime] {
   protected def parseFromAny(a: PhysicalType) = a match {
     case d: DateWrapper => Some(new DateTime(d.v.getTime()))
-    case bsonTime: BSONTimestampWrapper => Some(new DateTime(bsonTime.v.getTime()))
     case _ => None
   }
   def serialize(t: DateTime): PhysicalType = DateWrapper(t.toDate)
