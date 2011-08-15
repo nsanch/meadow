@@ -81,7 +81,7 @@ abstract class Record[IdType](dbo: BSONObject, newRecord: Boolean) {
   def descriptor: BaseRecordDescriptor
   var fields: ListMap[BaseFieldDescriptor, BaseValueContainer] = new ListMap()
 
-  def build[T, Reqd <: MaybeExists, Ext <: Extensions[T]](fd: FieldDescriptor[T, Reqd, Ext, _]): ValueContainer[T, Reqd, Ext] = {
+  def build[T, Reqd <: MaybeExists, Ext <: Extensions[T]](fd: FieldDescriptor[T, Reqd, Ext]): ValueContainer[T, Reqd, Ext] = {
     val container = (
       if (newRecord) {
         fd.createForNewRecord()
@@ -89,8 +89,7 @@ abstract class Record[IdType](dbo: BSONObject, newRecord: Boolean) {
         fd.extractFrom(dbo)
       }
     )
-    // Annoyingly, the compiler needs two separate hints on the next line. :(
-    fields += Tuple2(fd: BaseFieldDescriptor, container)
+    fields += Tuple2(fd, container)
     container
   }
 

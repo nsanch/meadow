@@ -19,9 +19,9 @@ object FieldDescriptor {
    * unextended, but have a type and a serializer.
    */
   def apply[T](name: String, serializer: Serializer[T]) = {
-    new FieldDescriptor[T, NotRequiredToExist, NoExtensions[T], NotExtended](name,
-                                                                             serializer,
-                                                                             _ => NoExtensions())
+    new FieldDescriptor[T, NotRequiredToExist, NoExtensions[T]](name,
+                                                                serializer,
+                                                                _ => NoExtensions())
   }
 }
 
@@ -29,7 +29,7 @@ object FieldDescriptor {
  * This class acts as a builder for ValueContainer's and can be combined with
  * RecordDescriptor to form a schema for a particular collection.
  */
-class FieldDescriptor[T, Reqd <: MaybeExists, Ext <: Extensions[T], Extd <: MaybeExtended](
+class FieldDescriptor[T, Reqd <: MaybeExists, Ext <: Extensions[T]](
     override val name: String,
     val serializer: Serializer[T],
     val extensions: ExtendableValueContainer[T, Ext] => Ext,
@@ -78,8 +78,8 @@ class FieldDescriptor[T, Reqd <: MaybeExists, Ext <: Extensions[T], Extd <: Mayb
    * field required if all existing records and all new records will have the
    * value set.
    */
-  def required_!()(implicit ev: Reqd =:= NotRequiredToExist): FieldDescriptor[T, MustExist, Ext, Extd] = {
-    new FieldDescriptor[T, MustExist, Ext, Extd](this.name, this.serializer, this.extensions, this.generatorOpt, Some(AssertingBehavior()))
+  def required_!()(implicit ev: Reqd =:= NotRequiredToExist): FieldDescriptor[T, MustExist, Ext] = {
+    new FieldDescriptor[T, MustExist, Ext](this.name, this.serializer, this.extensions, this.generatorOpt, Some(AssertingBehavior()))
   }
 
   /**
@@ -90,8 +90,8 @@ class FieldDescriptor[T, Reqd <: MaybeExists, Ext <: Extensions[T], Extd <: Mayb
    * default value would ever be used, then the field is by definition not
    * required, or was not at some point in the past.
    */
-  def withDefaultValue(defaultVal: T)(implicit ev: Reqd =:= NotRequiredToExist): FieldDescriptor[T, MustExist, Ext, Extd] = {
-    new FieldDescriptor[T, MustExist, Ext, Extd](this.name, this.serializer, this.extensions, this.generatorOpt, Some(DefaultValueBehavior(defaultVal)))
+  def withDefaultValue(defaultVal: T)(implicit ev: Reqd =:= NotRequiredToExist): FieldDescriptor[T, MustExist, Ext] = {
+    new FieldDescriptor[T, MustExist, Ext](this.name, this.serializer, this.extensions, this.generatorOpt, Some(DefaultValueBehavior(defaultVal)))
   }
 
   /**
@@ -101,8 +101,8 @@ class FieldDescriptor[T, Reqd <: MaybeExists, Ext <: Extensions[T], Extd <: Mayb
    * Having a generator does not automatically make a field required because
    * there may be existing fields in the DB that do not have the value set.
    */
-  def withGenerator(generator: Generator[T]): FieldDescriptor[T, Reqd, Ext, Extd] = {
-    new FieldDescriptor[T, Reqd, Ext, Extd](this.name, this.serializer, this.extensions, Some(generator), this.behaviorWhenUnset)
+  def withGenerator(generator: Generator[T]): FieldDescriptor[T, Reqd, Ext] = {
+    new FieldDescriptor[T, Reqd, Ext](this.name, this.serializer, this.extensions, Some(generator), this.behaviorWhenUnset)
   }
 
   /**
@@ -112,8 +112,8 @@ class FieldDescriptor[T, Reqd <: MaybeExists, Ext <: Extensions[T], Extd <: Mayb
    * ValueContainer.
    */
   def withExtensions[NewExt <: Extensions[T]](extCreator: ExtendableValueContainer[T, NewExt] => NewExt)
-                                             (implicit ev: Extd =:= NotExtended): FieldDescriptor[T, Reqd, NewExt, Extended] = {
-    new FieldDescriptor[T, Reqd, NewExt, Extended](this.name, this.serializer, extCreator, this.generatorOpt, this.behaviorWhenUnset)
+                                             (implicit ev: Ext =:= NoExtensions[T]): FieldDescriptor[T, Reqd, NewExt] = {
+    new FieldDescriptor[T, Reqd, NewExt](this.name, this.serializer, extCreator, this.generatorOpt, this.behaviorWhenUnset)
   }
 
   /**
@@ -121,7 +121,7 @@ class FieldDescriptor[T, Reqd <: MaybeExists, Ext <: Extensions[T], Extd <: Mayb
    * pointing at the given RecordDescriptor.
    */
   def withFKExtensions[RecordType <: Record[T]](desc: RecordDescriptor[RecordType, T])
-                                               (implicit ev: Extd =:= NotExtended): FieldDescriptor[T, Reqd, FKExtension[RecordType, T], Extended] = {
+                                               (implicit ev: Ext =:= NoExtensions[T]): FieldDescriptor[T, Reqd, FKExtension[RecordType, T]] = {
     withExtensions[FKExtension[RecordType, T]](vc => new FKExtension(vc, desc))
   }
 }

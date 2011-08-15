@@ -51,7 +51,7 @@ abstract class ValueContainer[T, Reqd <: MaybeExists, Ext <: Extensions[T]]
 }
 
 private[meadow] final class ConcreteValueContainer[T, Reqd <: MaybeExists, Ext <: Extensions[T]](
-    override val descriptor: FieldDescriptor[T, Reqd, Ext, _],
+    override val descriptor: FieldDescriptor[T, Reqd, Ext],
     initFrom: Option[T],
     extensionCreator: ExtendableValueContainer[T, Ext] => Ext,
     behaviorWhenUnset: Option[UnsetBehavior[T]]) extends ValueContainer[T, Reqd, Ext] {
