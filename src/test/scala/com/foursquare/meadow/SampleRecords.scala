@@ -18,15 +18,6 @@ object ReferencedRecordSchema extends Schema[ReferencedRecord, ObjectId] {
 
   val _id = objectIdField("_id").required_!().withGenerator(ObjectIdGenerator)
   val name = stringField("name")
-
-  trait FK {
-    val refId = objectIdField("refId").withFKExtensions(ReferencedRecordSchema)
-  }
-
-  class FKList[R <: Record[_] with TestThing, Ext <: Extension[ObjectId] with ForeignKeyLogic[ReferencedRecord, ObjectId]](lst: List[R],
-                                           lambda: R => ExtendableValueContainer[ObjectId, Ext]) {
-    def primeRefs = ReferencedRecordSchema.prime(lst, lambda)
-  }
 }
 
 class ReferencedRecord protected(dbo: BSONObject, newRecord: Boolean) extends Record[ObjectId](dbo, newRecord) {
@@ -38,8 +29,7 @@ class ReferencedRecord protected(dbo: BSONObject, newRecord: Boolean) extends Re
 }
 
 
-object SampleSchema extends Schema[Sample, ObjectId]
-                    with ReferencedRecordSchema.FK {
+object SampleSchema extends Schema[Sample, ObjectId] {
   override protected def createInstance(dbo: BSONObject, newRecord: Boolean) = new Sample(dbo, newRecord)
   override protected def mongoLocation = MongoLocation("test", "sample")
 
@@ -51,15 +41,11 @@ object SampleSchema extends Schema[Sample, ObjectId]
   val embedded = recordField("embedded", this)
   val enum = FieldDescriptor[TestEnum.Value]("enum", MappedSerializer(TestEnum.values.toList.map(v => (v.toString, v)).toMap, _.toString))
   val custom = stringField("custom").withExtensions[CustomExtension](vc => new CustomExtension(vc))
-}
-
-trait TestThing {
-  val refId: ExtendableValueContainer[ObjectId, Extension[ObjectId] with ForeignKeyLogic[ReferencedRecord, ObjectId]]
+  val refId = objectIdField("refId").withFKExtensions(ReferencedRecordSchema)
 }
 
 class Sample protected(dbo: BSONObject, newRecord: Boolean)
-    extends Record[ObjectId](dbo, newRecord)
-    with TestThing {
+    extends Record[ObjectId](dbo, newRecord) {
   override val schema = SampleSchema
   override def id = _id.get
 
@@ -74,8 +60,4 @@ class Sample protected(dbo: BSONObject, newRecord: Boolean)
 
   // hrm, this sucks. should probably be another trait somehow?
   val refId = build(schema.refId) 
-}
-
-object PrimingImplicits {
-  implicit def refRecFKsToPrimable[R <: Record[_] with TestThing](lst: List[R]): ReferencedRecordSchema.FKList[R, _] = new ReferencedRecordSchema.FKList(lst, (r: R) => r.refId)
 }
