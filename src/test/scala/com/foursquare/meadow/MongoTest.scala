@@ -8,13 +8,13 @@ import org.junit.Test
 class MongoTest {
   @Test
   def testSaveAndLoad: Unit = {
-    val created = SampleDescriptor.createRecord
+    val created = SampleSchema.createRecord
     val createdId = created._id.get
     created.int.set(77)
 
     created.save
 
-    val foundSampleOpt = SampleDescriptor.findOne(createdId)
+    val foundSampleOpt = SampleSchema.findOne(createdId)
     val foundSample = foundSampleOpt.get
     assertEquals(created.id, foundSample.id)
     assertEquals(created.int.getOpt, foundSample.int.getOpt)

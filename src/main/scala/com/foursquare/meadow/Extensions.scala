@@ -18,7 +18,7 @@ trait ForeignKeyLogic[R <: Record[IdType], IdType] {
   self: Extension[IdType] =>
 
   protected def vc: ExtendableValueContainer[IdType, FKExtension[R, IdType]]
-  protected def descriptor: RecordDescriptor[R, IdType]
+  protected def descriptor: Schema[R, IdType]
 
   private var _primedObj: Option[R] = None
   private var _isPrimed: Boolean = false
@@ -61,7 +61,7 @@ trait ForeignKeyLogic[R <: Record[IdType], IdType] {
 }
 
 class FKExtension[R <: Record[IdType], IdType](override val vc: ExtendableValueContainer[IdType, FKExtension[R, IdType]],
-                                               override val descriptor: RecordDescriptor[R, IdType])
+                                               override val descriptor: Schema[R, IdType])
   extends Extension[IdType] with ForeignKeyLogic[R, IdType]
 
 object PrimingLogic {
@@ -69,7 +69,7 @@ object PrimingLogic {
             ReferencedRecord <: Record[IdType],
             IdType,
             Ext <: Extension[IdType] with ForeignKeyLogic[ReferencedRecord, IdType]](
-      referencedDescriptor: RecordDescriptor[ReferencedRecord, IdType],
+      referencedDescriptor: Schema[ReferencedRecord, IdType],
       containingRecords: List[ContainingRecord],
       lambda: ContainingRecord => ExtendableValueContainer[IdType, Ext],
       known: List[ReferencedRecord] = Nil): List[ContainingRecord] = {

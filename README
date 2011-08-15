@@ -1,0 +1,53 @@
+Meadow is a first draft of a scala ORM. I am not convinced its possible to make
+an ORM that is actively good, so where possible I have tried to cut features
+out.
+
+Meadow is definitely inspired by Lift's Record and Field, both as a pattern and
+as an anti-pattern. It borrows from lift, hopefully without replicating its
+flaws.
+
+*ValueContainer*: One of the biggest frustrations with Lift's Field/Record
+classes is the sheer number of classes involved in its inheritance hierarchy.
+It is incredibly difficult to figure out what types are accepted by various
+methods or returned by them, let alone what the implementations of those
+methods are. To address that problem, Meadow only has one concrete
+ValueContainer class, and any additions in functionality are added either
+through a Serializer or a custom Extension.
+
+*Serializers* are responsible for mapping between the BSONObject's
+that mongo provides and the logical types we actually want to program against.
+It's trivial to support a new logical type by adding a new Serializer, usually
+with <10 lines of code.
+
+*Extensions* allow the addition of type-safe functionality to a ValueContainer
+through composition, not inheritance. For example, the FKExtension provided
+here allows for some fields to be marked as a foreign key to another
+collection, and to have logic for looking up the referenced object. Extension's
+are also given a pointer to the associated ValueContainer at construction-time
+and have a callback that's triggered when the value of a field changes, so they
+have a great deal of flexibility.
+
+*Schemas* allow the declaration of an individual collection as a group of
+fields. This is very much inspired by the MetaRecord idea in Lift, but there is
+no inheritance relationship between the singleton Schema and the individual
+Record.
+
+*Records* are created to model an individual record in a database. Each record
+contains a set of ValueContainer's and has a reference back to the Schema with
+which it's associated.
+
+
+Note:
+
+- It is annoying that every field must be declared in its Schema and in its
+   Record. I don't know of a way to fix without adding an undesired inheritance
+   relationship or code-gen. Given those two alternatives, I think the
+   inconvenience of the extra line in each Record isn't too bad.
+- It is difficult to have traits shared across multiple Records.
+- There is no relationship between a ValueContainer and the field that owns it,
+   so you can't do x.foo(1).bar(2) like you can in lift.
+- There is no .toForm or .validate functionality. Display logic and model logic
+   do not belong together so explicitly, but it would be possible to make an
+   Extension to add that functionality if desired.
+- Meadow is relatively strict about failures, so it throws an exception if it
+   can't parse a value in the DB, for example.

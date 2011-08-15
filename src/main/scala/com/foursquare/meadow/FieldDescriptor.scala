@@ -27,7 +27,7 @@ object FieldDescriptor {
 
 /**
  * This class acts as a builder for ValueContainer's and can be combined with
- * RecordDescriptor to form a schema for a particular collection.
+ * Schema to form a schema for a particular collection.
  */
 class FieldDescriptor[T, Reqd <: MaybeExists, Ext <: Extension[T]](
     override val name: String,
@@ -118,9 +118,9 @@ class FieldDescriptor[T, Reqd <: MaybeExists, Ext <: Extension[T]](
 
   /**
    * A helper method to specify that a field should use a foreign key extension
-   * pointing at the given RecordDescriptor.
+   * pointing at the given Schema.
    */
-  def withFKExtensions[RecordType <: Record[T]](desc: RecordDescriptor[RecordType, T])
+  def withFKExtensions[RecordType <: Record[T]](desc: Schema[RecordType, T])
                                                (implicit ev: Ext =:= NoExtensions[T]): FieldDescriptor[T, Reqd, FKExtension[RecordType, T]] = {
     withExtensions[FKExtension[RecordType, T]](vc => new FKExtension(vc, desc))
   }

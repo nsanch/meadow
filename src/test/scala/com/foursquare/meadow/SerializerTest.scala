@@ -127,14 +127,14 @@ class SerializerTest {
 
   @Test
   def testRecord: Unit = {
-    val sampleS = RecordSerializer(SampleDescriptor)
-    val sample = SampleDescriptor.createRecord
+    val sampleS = RecordSerializer(SampleSchema)
+    val sample = SampleSchema.createRecord
     sample.int.set(1)
     sample.long.set(2L)
     sample.string.set("outer")
     sample.double.set(3.0)
     sample.enum.set(TestEnum.One)
-    val innerSample = SampleDescriptor.createRecord
+    val innerSample = SampleSchema.createRecord
     innerSample.string.set("inner")
     sample.embedded.set(innerSample)
 

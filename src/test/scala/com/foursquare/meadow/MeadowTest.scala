@@ -11,7 +11,7 @@ import org.junit.Assert._
 class MeadowTest {
   @Test
   def customField: Unit = {
-    val rec = SampleDescriptor.createRecord
+    val rec = SampleSchema.createRecord
     assertEquals(rec.custom.ext.someCustomMethod, "whee None")
     rec.custom.set("foo")
     assertEquals(rec.custom.ext.someCustomMethod, "whee Some(foo)")
@@ -19,8 +19,8 @@ class MeadowTest {
 
   @Test
   def setEmbeddedRecord: Unit = {
-    val outerSample = SampleDescriptor.createRecord
-    val innerSample = SampleDescriptor.createRecord
+    val outerSample = SampleSchema.createRecord
+    val innerSample = SampleSchema.createRecord
 
     outerSample.embedded.set(innerSample)
 
@@ -29,13 +29,13 @@ class MeadowTest {
 
     outerSample.save
 
-    val outerSample2 = SampleDescriptor.findOne(outerId).get
+    val outerSample2 = SampleSchema.findOne(outerId).get
     assertEquals(outerSample2.embedded.getOpt.get.id, innerId)
   }
   
   @Test
   def testSettingEnum: Unit = {
-    val rec = SampleDescriptor.createRecord
+    val rec = SampleSchema.createRecord
     assertEquals(rec.enum.getOpt, None)
 
     rec.enum.set(TestEnum.Two)
@@ -47,10 +47,10 @@ class MeadowTest {
 
   @Test
   def testFK: Unit = {
-    val ref = ReferencedRecordDescriptor.createRecord
+    val ref = ReferencedRecordSchema.createRecord
     val refId = ref.id
 
-    val sample = SampleDescriptor.createRecord
+    val sample = SampleSchema.createRecord
     val sampleId = sample.id
     sample.refId.ext.set(ref)
     assertEquals(sample.refId.getOpt, Some(refId))
@@ -58,17 +58,17 @@ class MeadowTest {
     sample.save
     ref.save
     
-    val sample2 = SampleDescriptor.findOne(sampleId).get
+    val sample2 = SampleSchema.findOne(sampleId).get
     assertEquals(sample2.refId.ext.fetchObj.get.id, refId)
     assertEquals(sample2.refId.ext.primedObj.get.id, refId)
   }
 
   @Test
   def testFKPrimedManually: Unit = {
-    val ref = ReferencedRecordDescriptor.createRecord
+    val ref = ReferencedRecordSchema.createRecord
     val refId = ref.id
 
-    val sample = SampleDescriptor.createRecord
+    val sample = SampleSchema.createRecord
     sample.refId.ext.set(ref)
     assertEquals(sample.refId.getOpt, Some(refId))
 
@@ -79,10 +79,10 @@ class MeadowTest {
 
   @Test(expected = classOf[RuntimeException])
   def testUnprimedFKThrows: Unit = {
-    val ref = ReferencedRecordDescriptor.createRecord
+    val ref = ReferencedRecordSchema.createRecord
     val refId = ref.id
 
-    val sample = SampleDescriptor.createRecord
+    val sample = SampleSchema.createRecord
     // This uses the ValueContainer's set() instead of the FKExtension's set()
     // because the latter set() does priming implicitly.
     sample.refId.set(ref.id)
@@ -96,10 +96,10 @@ class MeadowTest {
   @Test
   def testPriming: Unit = {
     val (ref1, ref2, ref3, ref4) = 
-        (ReferencedRecordDescriptor.createRecord,
-         ReferencedRecordDescriptor.createRecord,
-         ReferencedRecordDescriptor.createRecord,
-         ReferencedRecordDescriptor.createRecord)
+        (ReferencedRecordSchema.createRecord,
+         ReferencedRecordSchema.createRecord,
+         ReferencedRecordSchema.createRecord,
+         ReferencedRecordSchema.createRecord)
 
     ref1.name.set("foo")
     ref2.name.set("bar")
@@ -111,12 +111,12 @@ class MeadowTest {
     // don't save ref3 or ref4 to be sure that a fetch for them would fail.
 
     val (sample1, sample2, sample3, sample4, sample5, sample6) = 
-        (SampleDescriptor.createRecord,
-         SampleDescriptor.createRecord,
-         SampleDescriptor.createRecord,
-         SampleDescriptor.createRecord,
-         SampleDescriptor.createRecord,
-         SampleDescriptor.createRecord)
+        (SampleSchema.createRecord,
+         SampleSchema.createRecord,
+         SampleSchema.createRecord,
+         SampleSchema.createRecord,
+         SampleSchema.createRecord,
+         SampleSchema.createRecord)
 
     sample1.refId.set(refId1)
     sample2.refId.set(refId1)
@@ -128,7 +128,7 @@ class MeadowTest {
     // the list of known records we pass to prime.
     sample6.refId.set(ref4.id)
 
-    //ReferencedRecordDescriptor.prime(List(sample1, sample2, sample3, sample4, sample5),
+    //ReferencedRecordSchema.prime(List(sample1, sample2, sample3, sample4, sample5),
     //                                 (s: Sample) => s.refId,
     //                                 known = List(ref4))
     import PrimingImplicits._

@@ -12,7 +12,7 @@ class CustomExtension(vc: ExtendableValueContainer[String, CustomExtension]) ext
   def someCustomMethod = "whee " + vc.getOpt
 }
 
-object ReferencedRecordDescriptor extends RecordDescriptor[ReferencedRecord, ObjectId] {
+object ReferencedRecordSchema extends Schema[ReferencedRecord, ObjectId] {
   override protected def createInstance(dbo: BSONObject, newRecord: Boolean) = new ReferencedRecord(dbo, newRecord)
   override protected def mongoLocation = MongoLocation("test", "ref")
 
@@ -20,26 +20,26 @@ object ReferencedRecordDescriptor extends RecordDescriptor[ReferencedRecord, Obj
   val name = stringField("name")
 
   trait FK {
-    val refId = objectIdField("refId").withFKExtensions(ReferencedRecordDescriptor)
+    val refId = objectIdField("refId").withFKExtensions(ReferencedRecordSchema)
   }
 
   class FKList[R <: Record[_] with TestThing, Ext <: Extension[ObjectId] with ForeignKeyLogic[ReferencedRecord, ObjectId]](lst: List[R],
                                            lambda: R => ExtendableValueContainer[ObjectId, Ext]) {
-    def primeRefs = ReferencedRecordDescriptor.prime(lst, lambda)
+    def primeRefs = ReferencedRecordSchema.prime(lst, lambda)
   }
 }
 
 class ReferencedRecord protected(dbo: BSONObject, newRecord: Boolean) extends Record[ObjectId](dbo, newRecord) {
-  override val descriptor = ReferencedRecordDescriptor
+  override val schema = ReferencedRecordSchema
   override def id = _id.get
 
-  val _id = build(descriptor._id)
-  val name = build(descriptor.name)
+  val _id = build(schema._id)
+  val name = build(schema.name)
 }
 
 
-object SampleDescriptor extends RecordDescriptor[Sample, ObjectId]
-                        with ReferencedRecordDescriptor.FK {
+object SampleSchema extends Schema[Sample, ObjectId]
+                    with ReferencedRecordSchema.FK {
   override protected def createInstance(dbo: BSONObject, newRecord: Boolean) = new Sample(dbo, newRecord)
   override protected def mongoLocation = MongoLocation("test", "sample")
 
@@ -60,22 +60,22 @@ trait TestThing {
 class Sample protected(dbo: BSONObject, newRecord: Boolean)
     extends Record[ObjectId](dbo, newRecord)
     with TestThing {
-  override val descriptor = SampleDescriptor
+  override val schema = SampleSchema
   override def id = _id.get
 
-  val _id = build(descriptor._id)
-  val int = build(descriptor.int)
-  val long = build(descriptor.long)
-  val string = build(descriptor.string)
-  val double = build(descriptor.double)
-  val embedded = build(descriptor.embedded)
-  val enum = build(descriptor.enum)
-  val custom = build(descriptor.custom)
+  val _id = build(schema._id)
+  val int = build(schema.int)
+  val long = build(schema.long)
+  val string = build(schema.string)
+  val double = build(schema.double)
+  val embedded = build(schema.embedded)
+  val enum = build(schema.enum)
+  val custom = build(schema.custom)
 
   // hrm, this sucks. should probably be another trait somehow?
-  val refId = build(descriptor.refId) 
+  val refId = build(schema.refId) 
 }
 
 object PrimingImplicits {
-  implicit def refRecFKsToPrimable[R <: Record[_] with TestThing](lst: List[R]): ReferencedRecordDescriptor.FKList[R, _] = new ReferencedRecordDescriptor.FKList(lst, (r: R) => r.refId)
+  implicit def refRecFKsToPrimable[R <: Record[_] with TestThing](lst: List[R]): ReferencedRecordSchema.FKList[R, _] = new ReferencedRecordSchema.FKList(lst, (r: R) => r.refId)
 }
