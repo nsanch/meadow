@@ -128,8 +128,10 @@ class MeadowTest {
     // the list of known records we pass to prime.
     sample6.refId.set(ref4.id)
 
-    ReferencedRecordSchema.prime(List(sample1, sample2, sample3, sample4, sample5),
-                                     (s: Sample) => s.refId,
-                                     known = List(ref4))
+    //ReferencedRecordSchema.prime(List(sample1, sample2, sample3, sample4, sample5),
+    //                                 (s: Sample) => s.refId,
+    //                                 known = List(ref4))
+    import PrimingImplicits._
+    List(sample1, sample2, sample3, sample4, sample5).primeRefs
   }
 }
