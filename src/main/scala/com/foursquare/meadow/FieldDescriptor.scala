@@ -29,7 +29,7 @@ object FieldDescriptor {
  * This class acts as a builder for ValueContainer's and can be combined with
  * RecordDescriptor to form a schema for a particular collection.
  */
-class FieldDescriptor[T, Reqd <: MaybeExists, Ext <: Extensions[T]](
+class FieldDescriptor[T, Reqd <: MaybeExists, Ext <: Extension[T]](
     override val name: String,
     val serializer: Serializer[T],
     val extensions: ExtendableValueContainer[T, Ext] => Ext,
@@ -111,7 +111,7 @@ class FieldDescriptor[T, Reqd <: MaybeExists, Ext <: Extensions[T]](
    * It is not possible to specify two extensions on one FieldDescriptor or
    * ValueContainer.
    */
-  def withExtensions[NewExt <: Extensions[T]](extCreator: ExtendableValueContainer[T, NewExt] => NewExt)
+  def withExtensions[NewExt <: Extension[T]](extCreator: ExtendableValueContainer[T, NewExt] => NewExt)
                                              (implicit ev: Ext =:= NoExtensions[T]): FieldDescriptor[T, Reqd, NewExt] = {
     new FieldDescriptor[T, Reqd, NewExt](this.name, this.serializer, extCreator, this.generatorOpt, this.behaviorWhenUnset)
   }

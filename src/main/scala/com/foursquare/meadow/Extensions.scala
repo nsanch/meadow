@@ -2,10 +2,10 @@ package com.foursquare.meadow
 
 import com.foursquare.meadow.Implicits._
 
-trait Extensions[T] {
+trait Extension[T] {
   def onChange(oldVal: Option[T], newVal: Option[T]): Unit = ()
 }
-case class NoExtensions[T]() extends Extensions[T]
+case class NoExtensions[T]() extends Extension[T]
 
 /**
  * A mixin for extended fields that model a foreign key to a separate
@@ -15,7 +15,7 @@ case class NoExtensions[T]() extends Extensions[T]
  * to use FKExtension defined below.
  */
 trait ForeignKeyLogic[R <: Record[IdType], IdType] {
-  self: Extensions[IdType] =>
+  self: Extension[IdType] =>
 
   protected def vc: ExtendableValueContainer[IdType, FKExtension[R, IdType]]
   protected def descriptor: RecordDescriptor[R, IdType]
@@ -62,13 +62,13 @@ trait ForeignKeyLogic[R <: Record[IdType], IdType] {
 
 class FKExtension[R <: Record[IdType], IdType](override val vc: ExtendableValueContainer[IdType, FKExtension[R, IdType]],
                                                override val descriptor: RecordDescriptor[R, IdType])
-  extends Extensions[IdType] with ForeignKeyLogic[R, IdType]
+  extends Extension[IdType] with ForeignKeyLogic[R, IdType]
 
 object PrimingLogic {
   def prime[ContainingRecord <: Record[_],
             ReferencedRecord <: Record[IdType],
             IdType,
-            Ext <: Extensions[IdType] with ForeignKeyLogic[ReferencedRecord, IdType]](
+            Ext <: Extension[IdType] with ForeignKeyLogic[ReferencedRecord, IdType]](
       referencedDescriptor: RecordDescriptor[ReferencedRecord, IdType],
       containingRecords: List[ContainingRecord],
       lambda: ContainingRecord => ExtendableValueContainer[IdType, Ext],

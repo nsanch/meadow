@@ -8,7 +8,7 @@ object TestEnum extends Enumeration {
   val Two = Value("two")
 }
 
-class CustomExtension(vc: ExtendableValueContainer[String, CustomExtension]) extends Extensions[String] {
+class CustomExtension(vc: ExtendableValueContainer[String, CustomExtension]) extends Extension[String] {
   def someCustomMethod = "whee " + vc.getOpt
 }
 
@@ -23,7 +23,7 @@ object ReferencedRecordDescriptor extends RecordDescriptor[ReferencedRecord, Obj
     val refId = objectIdField("refId").withFKExtensions(ReferencedRecordDescriptor)
   }
 
-  class FKList[R <: Record[_] with TestThing, Ext <: Extensions[ObjectId] with ForeignKeyLogic[ReferencedRecord, ObjectId]](lst: List[R],
+  class FKList[R <: Record[_] with TestThing, Ext <: Extension[ObjectId] with ForeignKeyLogic[ReferencedRecord, ObjectId]](lst: List[R],
                                            lambda: R => ExtendableValueContainer[ObjectId, Ext]) {
     def primeRefs = ReferencedRecordDescriptor.prime(lst, lambda)
   }
@@ -54,7 +54,7 @@ object SampleDescriptor extends RecordDescriptor[Sample, ObjectId]
 }
 
 trait TestThing {
-  val refId: ExtendableValueContainer[ObjectId, Extensions[ObjectId] with ForeignKeyLogic[ReferencedRecord, ObjectId]]
+  val refId: ExtendableValueContainer[ObjectId, Extension[ObjectId] with ForeignKeyLogic[ReferencedRecord, ObjectId]]
 }
 
 class Sample protected(dbo: BSONObject, newRecord: Boolean)

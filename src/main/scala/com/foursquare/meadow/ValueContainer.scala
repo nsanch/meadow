@@ -34,7 +34,7 @@ abstract class BaseValueContainer {
   def serialize: Option[PhysicalType]
 }
   
-abstract class ExtendableValueContainer[T, +Ext <: Extensions[T]] extends BaseValueContainer {
+abstract class ExtendableValueContainer[T, +Ext <: Extension[T]] extends BaseValueContainer {
   // Public interface
   def getOpt: Option[T]
   def set(t: T): Unit
@@ -44,13 +44,13 @@ abstract class ExtendableValueContainer[T, +Ext <: Extensions[T]] extends BaseVa
   def ext: Ext
 }
 
-abstract class ValueContainer[T, Reqd <: MaybeExists, Ext <: Extensions[T]]
+abstract class ValueContainer[T, Reqd <: MaybeExists, Ext <: Extension[T]]
     extends ExtendableValueContainer[T, Ext] {
   // Only required fields can use this method.
   def get(implicit ev: Reqd =:= MustExist): T
 }
 
-private[meadow] final class ConcreteValueContainer[T, Reqd <: MaybeExists, Ext <: Extensions[T]](
+private[meadow] final class ConcreteValueContainer[T, Reqd <: MaybeExists, Ext <: Extension[T]](
     override val descriptor: FieldDescriptor[T, Reqd, Ext],
     initFrom: Option[T],
     extensionCreator: ExtendableValueContainer[T, Ext] => Ext,
@@ -59,7 +59,7 @@ private[meadow] final class ConcreteValueContainer[T, Reqd <: MaybeExists, Ext <
   private var _valueOpt: Option[T] = initFrom
   private var _dirty = false
 
-  val ext = extensionCreator(this)
+  val ext: Ext = extensionCreator(this)
 
   protected def set(newOpt: Option[T]): Unit = {
     if (newOpt !=? _valueOpt) {

@@ -68,7 +68,7 @@ abstract class RecordDescriptor[RecordType <: Record[IdType], IdType] extends Ba
   }
     
   def prime[ContainingRecord <: Record[_],
-            Ext <: Extensions[IdType] with ForeignKeyLogic[RecordType, IdType]](
+            Ext <: Extension[IdType] with ForeignKeyLogic[RecordType, IdType]](
       containingRecords: List[ContainingRecord],
       lambda: ContainingRecord => ExtendableValueContainer[IdType, Ext],
       known: List[RecordType] = Nil): List[ContainingRecord] = {
@@ -81,7 +81,7 @@ abstract class Record[IdType](dbo: BSONObject, newRecord: Boolean) {
   def descriptor: BaseRecordDescriptor
   var fields: ListMap[BaseFieldDescriptor, BaseValueContainer] = new ListMap()
 
-  def build[T, Reqd <: MaybeExists, Ext <: Extensions[T]](fd: FieldDescriptor[T, Reqd, Ext]): ValueContainer[T, Reqd, Ext] = {
+  def build[T, Reqd <: MaybeExists, Ext <: Extension[T]](fd: FieldDescriptor[T, Reqd, Ext]): ValueContainer[T, Reqd, Ext] = {
     val container = (
       if (newRecord) {
         fd.createForNewRecord()
