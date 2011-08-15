@@ -13,6 +13,21 @@ sealed abstract class MaybeExists
 sealed abstract class MustExist extends MaybeExists
 sealed abstract class NotRequiredToExist extends MaybeExists
 
+// These classes encapsulate two different ways that a ValueContainer may
+// handle calls to 'get' and 'getOpt' when a value does not exist.
+sealed abstract class UnsetBehavior[T] {
+  def onGetOpt(opt: Option[T]): Option[T]
+  def onGet(opt: Option[T]): T
+}
+case class AssertingBehavior[T]() extends UnsetBehavior[T] {
+  override def onGetOpt(opt: Option[T]): Option[T] = opt
+  override def onGet(opt: Option[T]): T = opt.get
+}
+case class DefaultValueBehavior[T](defaultVal: T) extends UnsetBehavior[T] {
+  override def onGetOpt(opt: Option[T]): Option[T] = opt.orElse(Some(defaultVal))
+  override def onGet(opt: Option[T]): T = opt.getOrElse(defaultVal)
+}
+
 abstract class BaseValueContainer {
   def isDefined: Boolean
   def descriptor: BaseFieldDescriptor
@@ -38,13 +53,13 @@ abstract class ValueContainer[T, Reqd <: MaybeExists, Ext <: Extensions[T]]
 private[meadow] final class ConcreteValueContainer[T, Reqd <: MaybeExists, Ext <: Extensions[T]](
     override val descriptor: FieldDescriptor[T, Reqd, Ext, _],
     initFrom: Option[T],
-    extCreator: ExtendableValueContainer[T, Ext] => Ext,
+    extensionCreator: ExtendableValueContainer[T, Ext] => Ext,
     behaviorWhenUnset: Option[UnsetBehavior[T]]) extends ValueContainer[T, Reqd, Ext] {
   private var _origValueOpt: Option[T] = initFrom
   private var _valueOpt: Option[T] = initFrom
   private var _dirty = false
 
-  val ext = extCreator(this)
+  val ext = extensionCreator(this)
 
   protected def set(newOpt: Option[T]): Unit = {
     if (newOpt !=? _valueOpt) {
