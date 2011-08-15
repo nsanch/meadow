@@ -65,7 +65,7 @@ class FieldDescriptor[T, Reqd <: MaybeRequired, Ext <: Extensions[T]](
     vc
   }
   
-  def required()(implicit ev: Reqd =:= NotRequired): FieldDescriptor[T, Required, Ext] = {
+  def required_!()(implicit ev: Reqd =:= NotRequired): FieldDescriptor[T, Required, Ext] = {
     new FieldDescriptor[T, Required, Ext](this.name, this.serializer, this.extensions, this.generatorOpt, Some(AssertingBehavior()))
   }
 
@@ -99,25 +99,16 @@ abstract class BaseRecordDescriptor {
   def listField[T](name: String, elementSerializer: Serializer[T]) = {
     FieldDescriptor[List[T]](name, ListSerializer(elementSerializer))
   }
-  def recordField[R <: Record](name: String, desc: RecordDescriptor[R]) = {
+  def recordField[R <: Record[IdType], IdType](name: String, desc: RecordDescriptor[R, IdType]) = {
     FieldDescriptor[R](name, RecordSerializer(desc))
   }
   
-  def save(r: Record): Unit
-}
-
-case class MongoLocation(db: String, collection: String)
-
-abstract class RecordDescriptor[RecordType <: Record] extends BaseRecordDescriptor {
-  protected def createInstance(dbo: BSONObject, newRecord: Boolean): RecordType
   protected def mongoLocation: MongoLocation
+
   // TODO(nsanch): As much as possible, the mongo logic should move to another class.
   def coll(): DBCollection = MongoConnector.mongo.getDB(mongoLocation.db).getCollection(mongoLocation.collection)
 
-  final def createRecord: RecordType = createInstance(new BasicDBObject(), true)
-  final def loadRecord(dbo: BSONObject): RecordType = createInstance(dbo, false)
-    
-  def serialize(rec: Record): DBObject = {
+  def serialize(rec: Record[_]): DBObject = {
     val res = new BasicDBObject()
     for (container <- rec.fields;
          oneField <- container.serialize) {
@@ -126,27 +117,39 @@ abstract class RecordDescriptor[RecordType <: Record] extends BaseRecordDescript
     res
   }
 
-
-  def save(r: Record) = {
+  def save(r: Record[_]) = {
     // is it better to do insert for new records? appears to work fine either way
     coll().save(serialize(r), WriteConcern.NORMAL)
   }
+}
 
-  def findOne(id: ObjectId): Option[RecordType] = findAll(List(id)).headOption
+case class MongoLocation(db: String, collection: String)
 
-  def findAll(ids: List[ObjectId]): List[RecordType] = {
-    val idList = new BasicDBList()
-    ids.foreach(idList.add _)
-    val found = coll().find(new BasicDBObject("_id", new BasicDBObject("$in", idList))) 
-    val l = new MutableList[RecordType]()
-    while (found.hasNext()) {
-      l += loadRecord(found.next())
+abstract class RecordDescriptor[RecordType <: Record[IdType], IdType] extends BaseRecordDescriptor {
+  protected def createInstance(dbo: BSONObject, newRecord: Boolean): RecordType
+  final def createRecord: RecordType = createInstance(new BasicDBObject(), true)
+  final def loadRecord(dbo: BSONObject): RecordType = createInstance(dbo, false)
+    
+  def findOne(id: IdType): Option[RecordType] = findAll(List(id)).headOption
+
+  def findAll(ids: List[IdType]): List[RecordType] = {
+    if (ids.isEmpty) {
+      Nil
+    } else {
+      val idList = new BasicDBList()
+      ids.foreach(id => idList.add(id.asInstanceOf[AnyRef]))
+      val found = coll().find(new BasicDBObject("_id", new BasicDBObject("$in", idList))) 
+      val l = new MutableList[RecordType]()
+      while (found.hasNext()) {
+        l += loadRecord(found.next())
+      }
+      l.toList
     }
-    l.toList
   }
 }
 
-abstract class Record(dbo: BSONObject, newRecord: Boolean) {
+abstract class Record[IdType](dbo: BSONObject, newRecord: Boolean) {
+  def id: IdType
   def descriptor: BaseRecordDescriptor
   var fields: MutableList[BaseValueContainer] = new MutableList()
 

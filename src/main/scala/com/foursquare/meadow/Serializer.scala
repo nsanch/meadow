@@ -102,9 +102,9 @@ case object DateTimeSerializer extends Serializer[DateTime] {
   def serialize(t: DateTime): PhysicalType = DateWrapper(t.toDate)
 }
 
-case class RecordSerializer[RecordType <: Record](recordDescriptor: RecordDescriptor[RecordType]) extends Serializer[RecordType] {
+case class RecordSerializer[RecordType <: Record[IdType], IdType](recordDescriptor: RecordDescriptor[RecordType, IdType]) extends Serializer[RecordType] {
   protected def parseFromAny(a: PhysicalType): Option[RecordType] = a match {
-    case dbo: BSONObject => Some(recordDescriptor.loadRecord(dbo))
+    case dbo: BSONObjectWrapper => Some(recordDescriptor.loadRecord(dbo.v))
     case _ => None
   }
 
