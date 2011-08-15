@@ -60,7 +60,7 @@ class MeadowTest {
     
     val sample2 = SampleDescriptor.findOne(sampleId).get
     assertEquals(sample2.refId.ext.fetchObj.get.id, refId)
-    assertEquals(sample2.refId.ext.cachedObj.get.id, refId)
+    assertEquals(sample2.refId.ext.primedObj.get.id, refId)
   }
 
   @Test
@@ -74,7 +74,7 @@ class MeadowTest {
 
     sample.refId.ext.primeObj(ref)
     assertEquals(sample.refId.ext.fetchObj.get.id, refId)
-    assertEquals(sample.refId.ext.cachedObj.get.id, refId)
+    assertEquals(sample.refId.ext.primedObj.get.id, refId)
   }
 
   @Test(expected = classOf[RuntimeException])
@@ -90,6 +90,48 @@ class MeadowTest {
 
     ref.save
     // This should throw even through the object exists.
-    sample.refId.ext.cachedObj.get
+    sample.refId.ext.primedObj.get
+  }
+
+  @Test
+  def testPriming: Unit = {
+    val (ref1, ref2, ref3, ref4) = 
+        (ReferencedRecordDescriptor.createRecord,
+         ReferencedRecordDescriptor.createRecord,
+         ReferencedRecordDescriptor.createRecord,
+         ReferencedRecordDescriptor.createRecord)
+
+    ref1.name.set("foo")
+    ref2.name.set("bar")
+    ref3.name.set("baz")
+    ref4.name.set("boo")
+    val (refId1, refId2) = (ref1.id, ref2.id)
+    ref1.save
+    ref2.save
+    // don't save ref3 or ref4 to be sure that a fetch for them would fail.
+
+    val (sample1, sample2, sample3, sample4, sample5, sample6) = 
+        (SampleDescriptor.createRecord,
+         SampleDescriptor.createRecord,
+         SampleDescriptor.createRecord,
+         SampleDescriptor.createRecord,
+         SampleDescriptor.createRecord,
+         SampleDescriptor.createRecord)
+
+    sample1.refId.set(refId1)
+    sample2.refId.set(refId1)
+    sample3.refId.set(refId2)
+    // sample4 left empty
+    // sample5 is primed ahead of time with ref3, which doesn't exist in the db.
+    sample5.refId.ext.set(ref3)
+    // sample6 points at ref4, which wasn't persisted, so it can only come from
+    // the list of known records we pass to prime.
+    sample6.refId.set(ref4.id)
+
+    //ReferencedRecordDescriptor.prime(List(sample1, sample2, sample3, sample4, sample5),
+    //                                 (s: Sample) => s.refId,
+    //                                 known = List(ref4))
+    import PrimingImplicits._
+    List(sample1, sample2, sample3, sample4, sample5).primeRefs
   }
 }

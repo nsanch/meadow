@@ -20,7 +20,12 @@ object ReferencedRecordDescriptor extends RecordDescriptor[ReferencedRecord, Obj
   val name = stringField("name")
 
   trait FK {
-    val refId = objectIdField("refId").withExtensions[FKExtension[ReferencedRecord, ObjectId]](vc => new FKExtension(vc, ReferencedRecordDescriptor))
+    val refId = objectIdField("refId").withFKExtensions(ReferencedRecordDescriptor)
+  }
+
+  class FKList[R <: Record[_] with TestThing, Ext <: Extensions[ObjectId] with ForeignKeyLogic[ReferencedRecord, ObjectId]](lst: List[R],
+                                           lambda: R => ExtendableValueContainer[ObjectId, Ext]) {
+    def primeRefs = ReferencedRecordDescriptor.prime(lst, lambda)
   }
 }
 
@@ -48,7 +53,13 @@ object SampleDescriptor extends RecordDescriptor[Sample, ObjectId]
   val custom = stringField("custom").withExtensions[CustomExtension](vc => new CustomExtension(vc))
 }
 
-class Sample protected(dbo: BSONObject, newRecord: Boolean) extends Record[ObjectId](dbo, newRecord) {
+trait TestThing {
+  val refId: ExtendableValueContainer[ObjectId, Extensions[ObjectId] with ForeignKeyLogic[ReferencedRecord, ObjectId]]
+}
+
+class Sample protected(dbo: BSONObject, newRecord: Boolean)
+    extends Record[ObjectId](dbo, newRecord)
+    with TestThing {
   override val descriptor = SampleDescriptor
   override def id = _id.get
 
@@ -60,6 +71,11 @@ class Sample protected(dbo: BSONObject, newRecord: Boolean) extends Record[Objec
   val embedded = build(descriptor.embedded)
   val enum = build(descriptor.enum)
   val custom = build(descriptor.custom)
+
   // hrm, this sucks. should probably be another trait somehow?
   val refId = build(descriptor.refId) 
+}
+
+object PrimingImplicits {
+  implicit def refRecFKsToPrimable[R <: Record[_] with TestThing](lst: List[R]): ReferencedRecordDescriptor.FKList[R, _] = new ReferencedRecordDescriptor.FKList(lst, (r: R) => r.refId)
 }

@@ -16,7 +16,7 @@ class MongoTest {
 
     val foundSampleOpt = SampleDescriptor.findOne(createdId)
     val foundSample = foundSampleOpt.get
-    assertEquals(created._id.get, foundSample._id.get)
+    assertEquals(created.id, foundSample.id)
     assertEquals(created.int.getOpt, foundSample.int.getOpt)
   }
 }

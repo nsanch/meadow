@@ -4,9 +4,18 @@ import com.mongodb.{BasicDBObject, DBCollection, DBObject, WriteConcern, BasicDB
 import org.bson.BSONObject
 import org.bson.types.ObjectId
 import org.joda.time.DateTime
-import scala.collection.mutable.MutableList
+import scala.collection.mutable.{ListBuffer, ListMap}
 import scala.reflect.Manifest
 
+// These phantom types are used to ensure that a FieldDescriptor is never given
+// two extensions. For more about phantom types, check out
+// http://engineering.foursquare.com/2011/01/31/going-rogue-part-2-phantom-types/
+sealed abstract class MaybeExtended
+sealed abstract class Extended extends MaybeExtended
+sealed abstract class NotExtended extends MaybeExtended
+
+// These classes encapsulate two different ways that a ValueContainer may
+// handle calls to 'get' and 'getOpt' when a value does not exist.
 sealed abstract class UnsetBehavior[T] {
   def onGetOpt(opt: Option[T]): Option[T]
   def onGet(opt: Option[T]): T
@@ -25,35 +34,49 @@ abstract class BaseFieldDescriptor {
 }
 
 object FieldDescriptor {
-  def extractValue[T](serializer: Serializer[T], src: BSONObject, name: String): Option[T] = {
-    if (src.containsField(name)) {
-      Some(serializer.deserialize(PhysicalType(src.get(name))))
-    } else None
-  }
-
+  /**
+   * Helper method used to create field descriptors that start out optional and
+   * unextended, but have a type and a serializer.
+   */
   def apply[T](name: String, serializer: Serializer[T]) = {
-    new FieldDescriptor[T, NotRequired, NoExtensions[T]](name,
-                                                         serializer,
-                                                         _ => NoExtensions())
+    new FieldDescriptor[T, NotRequiredToExist, NoExtensions[T], NotExtended](name,
+                                                                             serializer,
+                                                                             _ => NoExtensions())
   }
 }
 
-class FieldDescriptor[T, Reqd <: MaybeRequired, Ext <: Extensions[T]](
+/**
+ * This class acts as a builder for ValueContainer's and can be combined with
+ * RecordDescriptor to form a schema for a particular collection.
+ */
+class FieldDescriptor[T, Reqd <: MaybeExists, Ext <: Extensions[T], Extd <: MaybeExtended](
     override val name: String,
     val serializer: Serializer[T],
     val extensions: ExtendableValueContainer[T, Ext] => Ext,
     val generatorOpt: Option[Generator[T]] = None,
     val behaviorWhenUnset: Option[UnsetBehavior[T]] = None) extends BaseFieldDescriptor {
 
+  /**
+   * Used when a ValueContainer is built from this FieldDescriptor, given a
+   * BSONObject that may or may not have a key for this data under
+   * <code>name</code>.
+   */
   def extractFrom(src: BSONObject): ValueContainer[T, Reqd, Ext] = {
+    val value = (
+      if (src.containsField(name)) {
+        Some(serializer.deserialize(PhysicalType(src.get(name))))
+      } else None
+    )
     new ConcreteValueContainer(this,
-                               FieldDescriptor.extractValue(serializer,
-                                                            src,
-                                                            name),
+                               value,
                                extensions,
                                behaviorWhenUnset)
   }
-  
+
+  /**
+   * Used when a ValueContainer is created for a new record. If a generator
+   * exists, this calls it to set a value.
+   */
   def createForNewRecord(): ValueContainer[T, Reqd, Ext] = {
     val vc = new ConcreteValueContainer(this,
                                         None,
@@ -65,27 +88,62 @@ class FieldDescriptor[T, Reqd <: MaybeRequired, Ext <: Extensions[T]](
     vc
   }
   
-  def required_!()(implicit ev: Reqd =:= NotRequired): FieldDescriptor[T, Required, Ext] = {
-    new FieldDescriptor[T, Required, Ext](this.name, this.serializer, this.extensions, this.generatorOpt, Some(AssertingBehavior()))
+  /**
+   * Required fields have a callable <code>get</code> method that asserts that
+   * the value is defined. getOpt will not do any such assertion.
+   *
+   * Fields may not be marked required and also have a default value. If the
+   * default value would ever be used, then the field is by definition not
+   * required, or was not at some point in the past. It is only safe to mark a
+   * field required if all existing records and all new records will have the
+   * value set.
+   */
+  def required_!()(implicit ev: Reqd =:= NotRequiredToExist): FieldDescriptor[T, MustExist, Ext, Extd] = {
+    new FieldDescriptor[T, MustExist, Ext, Extd](this.name, this.serializer, this.extensions, this.generatorOpt, Some(AssertingBehavior()))
   }
 
-  def withDefaultValue(defaultVal: T)(implicit ev: Reqd =:= NotRequired): FieldDescriptor[T, Required, Ext] = {
-    new FieldDescriptor[T, Required, Ext](this.name, this.serializer, this.extensions, this.generatorOpt, Some(DefaultValueBehavior(defaultVal)))
+  /**
+   * Fields with a default value will have a callable <code>get</code> method
+   * that returns the default value if the value is not explicitly defined.
+   *
+   * Fields may not be marked required and also have a default value. If the
+   * default value would ever be used, then the field is by definition not
+   * required, or was not at some point in the past.
+   */
+  def withDefaultValue(defaultVal: T)(implicit ev: Reqd =:= NotRequiredToExist): FieldDescriptor[T, MustExist, Ext, Extd] = {
+    new FieldDescriptor[T, MustExist, Ext, Extd](this.name, this.serializer, this.extensions, this.generatorOpt, Some(DefaultValueBehavior(defaultVal)))
   }
 
-  def withGenerator(generator: Generator[T]): FieldDescriptor[T, Reqd, Ext] = {
-    new FieldDescriptor[T, Reqd, Ext](this.name, this.serializer, this.extensions, Some(generator), this.behaviorWhenUnset)
+  /**
+   * If a generator is specified, then, on record-creation, all generated
+   * fields will be given an initial value as specified by their generator.
+   *
+   * Having a generator does not automatically make a field required because
+   * there may be existing fields in the DB that do not have the value set.
+   */
+  def withGenerator(generator: Generator[T]): FieldDescriptor[T, Reqd, Ext, Extd] = {
+    new FieldDescriptor[T, Reqd, Ext, Extd](this.name, this.serializer, this.extensions, Some(generator), this.behaviorWhenUnset)
   }
 
-  def withExtensions[NewExt <: Extensions[T]](extCreator: ExtendableValueContainer[T, NewExt] => NewExt): FieldDescriptor[T, Reqd, NewExt] = {
-    new FieldDescriptor[T, Reqd, NewExt](this.name, this.serializer, extCreator, this.generatorOpt, this.behaviorWhenUnset)
+  /**
+   * Adds a typed extension to the ValueContainer.
+   *
+   * It is not possible to specify two extensions on one FieldDescriptor or
+   * ValueContainer.
+   */
+  def withExtensions[NewExt <: Extensions[T]](extCreator: ExtendableValueContainer[T, NewExt] => NewExt)
+                                             (implicit ev: Extd =:= NotExtended): FieldDescriptor[T, Reqd, NewExt, Extended] = {
+    new FieldDescriptor[T, Reqd, NewExt, Extended](this.name, this.serializer, extCreator, this.generatorOpt, this.behaviorWhenUnset)
   }
 
-// on creation:
-// - if unset, set with optional generator. even optional fields can have a generator, for introduction of new fields for example.
-// during normal use, if 'get' method is desired:
-// - assert existence and throw when not available? _id for example. get = getOpt.get
-// - okay with nonexistence and provide a default value to return from get and getOpt
+  /**
+   * A helper method to specify that a field should use a foreign key extension
+   * pointing at the given RecordDescriptor.
+   */
+  def withFKExtensions[RecordType <: Record[T]](desc: RecordDescriptor[RecordType, T])
+                                               (implicit ev: Extd =:= NotExtended): FieldDescriptor[T, Reqd, FKExtension[RecordType, T], Extended] = {
+    withExtensions[FKExtension[RecordType, T]](vc => new FKExtension(vc, desc))
+  }
 }
 
 abstract class BaseRecordDescriptor {
@@ -102,7 +160,7 @@ abstract class BaseRecordDescriptor {
   def recordField[R <: Record[IdType], IdType](name: String, desc: RecordDescriptor[R, IdType]) = {
     FieldDescriptor[R](name, RecordSerializer(desc))
   }
-  
+
   protected def mongoLocation: MongoLocation
 
   // TODO(nsanch): As much as possible, the mongo logic should move to another class.
@@ -110,15 +168,16 @@ abstract class BaseRecordDescriptor {
 
   def serialize(rec: Record[_]): DBObject = {
     val res = new BasicDBObject()
-    for (container <- rec.fields;
-         oneField <- container.serialize) {
-      res.put(container.descriptor.name, oneField.v) 
+    for ((fieldDesc, container) <- rec.fields;
+         serializedField <- container.serialize) {
+      res.put(fieldDesc.name, serializedField.v) 
     }
     res
   }
 
   def save(r: Record[_]) = {
-    // is it better to do insert for new records? appears to work fine either way
+    // TODO(nsanch): is it better to do insert for new records? appears to work
+    // fine either way.
     coll().save(serialize(r), WriteConcern.NORMAL)
   }
 }
@@ -132,38 +191,47 @@ abstract class RecordDescriptor[RecordType <: Record[IdType], IdType] extends Ba
     
   def findOne(id: IdType): Option[RecordType] = findAll(List(id)).headOption
 
-  def findAll(ids: List[IdType]): List[RecordType] = {
+  def findAll(ids: Traversable[IdType]): List[RecordType] = {
     if (ids.isEmpty) {
       Nil
     } else {
       val idList = new BasicDBList()
       ids.foreach(id => idList.add(id.asInstanceOf[AnyRef]))
       val found = coll().find(new BasicDBObject("_id", new BasicDBObject("$in", idList))) 
-      val l = new MutableList[RecordType]()
+      val l = new ListBuffer[RecordType]()
+      l.sizeHint(ids)
       while (found.hasNext()) {
         l += loadRecord(found.next())
       }
-      l.toList
+      l.result()
     }
+  }
+    
+  def prime[ContainingRecord <: Record[_],
+            Ext <: Extensions[IdType] with ForeignKeyLogic[RecordType, IdType]](
+      containingRecords: List[ContainingRecord],
+      lambda: ContainingRecord => ExtendableValueContainer[IdType, Ext],
+      known: List[RecordType] = Nil): List[ContainingRecord] = {
+    PrimingLogic.prime(this, containingRecords, lambda, known)
   }
 }
 
 abstract class Record[IdType](dbo: BSONObject, newRecord: Boolean) {
   def id: IdType
   def descriptor: BaseRecordDescriptor
-  var fields: MutableList[BaseValueContainer] = new MutableList()
+  var fields: ListMap[BaseFieldDescriptor, BaseValueContainer] = new ListMap()
 
-  def build[T, Reqd <: MaybeRequired, Ext <: Extensions[T]](fd: FieldDescriptor[T, Reqd, Ext]): ValueContainer[T, Reqd, Ext] = {
+  def build[T, Reqd <: MaybeExists, Ext <: Extensions[T]](fd: FieldDescriptor[T, Reqd, Ext, _]): ValueContainer[T, Reqd, Ext] = {
     val container = (if (newRecord) {
       fd.createForNewRecord()
     } else {
       fd.extractFrom(dbo)
     })
-    fields += container
+    fields += Tuple2(fd: BaseFieldDescriptor, container)
     container
   }
 
-  def save = {
+  def save = synchronized {
     descriptor.save(this)
   }
 }

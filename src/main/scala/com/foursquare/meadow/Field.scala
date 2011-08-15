@@ -4,14 +4,14 @@ import com.mongodb.DBObject
 
 import com.foursquare.meadow.Implicits._
 
-trait Extensions[T] {
-  def onChange(oldVal: Option[T], newVal: Option[T]): Unit = ()
-}
-case class NoExtensions[T]() extends Extensions[T]
-
-sealed abstract class MaybeRequired
-sealed abstract class Required extends MaybeRequired
-sealed abstract class NotRequired extends MaybeRequired
+// These phantom types are used to ensure that a FieldDescriptor doesn't let
+// you specify that a field is both required and has a default value, and also
+// that the 'get' method is only callable if a field is either required or has
+// a default value. For more about phantom types, check out
+// http://engineering.foursquare.com/2011/01/31/going-rogue-part-2-phantom-types/
+sealed abstract class MaybeExists
+sealed abstract class MustExist extends MaybeExists
+sealed abstract class NotRequiredToExist extends MaybeExists
 
 abstract class BaseValueContainer {
   def isDefined: Boolean
@@ -19,7 +19,7 @@ abstract class BaseValueContainer {
   def serialize: Option[PhysicalType]
 }
   
-abstract class ExtendableValueContainer[T, Ext <: Extensions[T]] extends BaseValueContainer {
+abstract class ExtendableValueContainer[T, +Ext <: Extensions[T]] extends BaseValueContainer {
   // Public interface
   def getOpt: Option[T]
   def set(t: T): Unit
@@ -29,14 +29,14 @@ abstract class ExtendableValueContainer[T, Ext <: Extensions[T]] extends BaseVal
   def ext: Ext
 }
 
-abstract class ValueContainer[T, Reqd <: MaybeRequired, Ext <: Extensions[T]]
+abstract class ValueContainer[T, Reqd <: MaybeExists, Ext <: Extensions[T]]
     extends ExtendableValueContainer[T, Ext] {
   // Only required fields can use this method.
-  def get(implicit ev: Reqd =:= Required): T
+  def get(implicit ev: Reqd =:= MustExist): T
 }
 
-private[meadow] final class ConcreteValueContainer[T, Reqd <: MaybeRequired, Ext <: Extensions[T]](
-    override val descriptor: FieldDescriptor[T, Reqd, Ext],
+private[meadow] final class ConcreteValueContainer[T, Reqd <: MaybeExists, Ext <: Extensions[T]](
+    override val descriptor: FieldDescriptor[T, Reqd, Ext, _],
     initFrom: Option[T],
     extCreator: ExtendableValueContainer[T, Ext] => Ext,
     behaviorWhenUnset: Option[UnsetBehavior[T]]) extends ValueContainer[T, Reqd, Ext] {
@@ -59,10 +59,8 @@ private[meadow] final class ConcreteValueContainer[T, Reqd <: MaybeRequired, Ext
   override def getOpt: Option[T] = {
     if (_valueOpt.isDefined) {
       _valueOpt
-    } else if (behaviorWhenUnset.isDefined) {
-      behaviorWhenUnset.flatMap(_.onGetOpt(_valueOpt))
     } else {
-      None
+      behaviorWhenUnset.flatMap(_.onGetOpt(_valueOpt))
     }
   }
   override def set(t: T): Unit = set(Some(t))
@@ -73,8 +71,8 @@ private[meadow] final class ConcreteValueContainer[T, Reqd <: MaybeRequired, Ext
   override def serialize: Option[PhysicalType] = _valueOpt.map(descriptor.serializer.serialize _)
 
   // Only required fields can use this method.
-  override def get(implicit ev: Reqd =:= Required): T = {
-    // behaviorWhenUnset must be defined for any Required containers
+  override def get(implicit ev: Reqd =:= MustExist): T = {
+    // behaviorWhenUnset must be defined for any MustExist containers
     behaviorWhenUnset.get.onGet(_valueOpt)
   }
 }
