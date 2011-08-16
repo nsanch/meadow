@@ -2,7 +2,16 @@ package com.foursquare.meadow
 
 import com.foursquare.meadow.Implicits._
 
+/**
+ * A base trait for any extensions to the behavior of a ValueContainer whose
+ * underlying value type is T.
+ */
 trait Extension[T] {
+  /**
+   * Hook for notifications of changes to the value of the underlying
+   * ValueContainer. Not invoked if 'set' is called but with the value it
+   * already had. 
+   */
   def onChange(oldVal: Option[T], newVal: Option[T]): Unit = ()
 }
 case class NoExtensions[T]() extends Extension[T]
@@ -17,7 +26,7 @@ case class NoExtensions[T]() extends Extension[T]
 trait ForeignKeyLogic[R <: Record[IdType], IdType] {
   self: Extension[IdType] =>
 
-  protected def vc: ExtendableValueContainer[IdType, FKExtension[R, IdType]]
+  protected def vc: ValueContainer[IdType, _, FKExtension[R, IdType]]
   protected def descriptor: Schema[R, IdType]
 
   private var _primedObj: Option[R] = None
@@ -28,11 +37,18 @@ trait ForeignKeyLogic[R <: Record[IdType], IdType] {
     _isPrimed = false
   }
 
+  /**
+   * Type-safe setter that calls the underlying ValueContainer with the
+   * record's id and automatically primes the cached value.
+   */
   def set(obj: R) = {
     vc.set(obj.id)
     primeObj(obj)
   }
 
+  /**
+   * Prime methods for when the associated object is known.
+   */
   def primeObj(obj: R): Unit = primeObj(Some(obj))
   def primeObj(obj: Option[R]): Unit = synchronized {
     if (vc.getOpt !=? obj.map(_.id)) {
@@ -42,6 +58,14 @@ trait ForeignKeyLogic[R <: Record[IdType], IdType] {
     _isPrimed = true
   }
 
+  /**
+   * Fetches the object associated with the underlying ID and caches it.
+   *
+   * Note: it is dangerous to call this from within a loop as each individual
+   * call will make its own roundtrip to the database. It is better to fetch in
+   * bulk, then call prime. PrimingLogic and the 'prime' method on
+   * RecordDescriptor help simplify that procedure. 
+   */
   def fetchObj: Option[R] = synchronized {
     if (!_isPrimed) {
       _primedObj = vc.getOpt.flatMap(id => descriptor.findOne(id))
@@ -50,6 +74,10 @@ trait ForeignKeyLogic[R <: Record[IdType], IdType] {
     _primedObj
   }
 
+  /**
+   * Returns a previously primed or fetched object. If the object has not been
+   * primed or fetched, throws an exception.
+   */
   def primedObj: Option[R] = synchronized {
     if (!_isPrimed && vc.isDefined) {
       throw new RuntimeException("cannot call primedObj on an FK that has not been primed or had fetchObj invoked")
@@ -57,21 +85,34 @@ trait ForeignKeyLogic[R <: Record[IdType], IdType] {
     _primedObj
   }
 
+  /**
+   * Returns true iff primeObj, fetchObj, or the type-safe setter have been
+   * invoked.
+   */
   def isPrimed: Boolean = _isPrimed
 }
 
-class FKExtension[R <: Record[IdType], IdType](override val vc: ExtendableValueContainer[IdType, FKExtension[R, IdType]],
+class FKExtension[R <: Record[IdType], IdType](override val vc: ValueContainer[IdType, MaybeExists, FKExtension[R, IdType]],
                                                override val descriptor: Schema[R, IdType])
   extends Extension[IdType] with ForeignKeyLogic[R, IdType]
 
 object PrimingLogic {
+  /**
+   * Looks up a batch of records referenced by foreign keys, and primes their
+   * foreign key objects accordingly. Expects the descriptor associated with
+   * the referenced records, the list of records that contain the foreign keys,
+   * and a method to extract the foreign key from a record. 
+   * 
+   * If the caller already has a list of known records of the referenced type,
+   * it can also pass that in to avoid possible lookups.
+   */
   def prime[ContainingRecord <: Record[_],
             ReferencedRecord <: Record[IdType],
             IdType,
             Ext <: Extension[IdType] with ForeignKeyLogic[ReferencedRecord, IdType]](
       referencedDescriptor: Schema[ReferencedRecord, IdType],
       containingRecords: List[ContainingRecord],
-      lambda: ContainingRecord => ExtendableValueContainer[IdType, Ext],
+      lambda: ContainingRecord => ValueContainer[IdType, MaybeExists, Ext],
       known: List[ReferencedRecord] = Nil): List[ContainingRecord] = {
  
     val (primedRecords, unprimedRecords) = containingRecords.partition(cr => !lambda(cr).isDefined || lambda(cr).ext.isPrimed)

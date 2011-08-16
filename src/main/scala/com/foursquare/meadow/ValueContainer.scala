@@ -34,26 +34,63 @@ abstract class BaseValueContainer {
   def serialize: Option[PhysicalType]
 }
   
-abstract class ExtendableValueContainer[T, +Ext <: Extension[T]] extends BaseValueContainer {
-  // Public interface
+/**
+ * Contains a mutable value and allows access to an Option, set's, unset's, and
+ * tests to see if the value has changed since the container was constructed.
+ * Exposes an Extension to provide additional functionality that is unique to
+ * the given container.
+ */
+abstract class ValueContainer[T, +Reqd <: MaybeExists, Ext <: Extension[T]] extends BaseValueContainer {
+  /**
+   * Returns the underlying value as a Some if it exists. If the value wasn't
+   * set and a default value was specified during creation of the
+   * ValueContainer, returns that defaultValue. Otherwise, returns None. 
+   */
   def getOpt: Option[T]
-  def set(t: T): Unit
-  def isDirty: Boolean
-  def unset: Unit
+  
+  /**
+   * Whether the underlying value is defined. Returns false when the value is
+   * undefined, even if a default value is available.
+   */
   def isDefined: Boolean
+  
+  /**
+   * Unsets the underlying value.
+   */
+  def unset: Unit
+
+  /**
+   * Sets the value to t.
+   */
+  def set(t: T): Unit
+
+  /**
+   * Whether the underlying value has changed since the container was created.
+   */
+  def isDirty: Boolean
+
+  /**
+   * Returns optional extensions specific to this container.
+   */
   def ext: Ext
+
+  /**
+   * Gets the underlying value of this field. If the value is unset and a
+   * default value is available, returns that. If the value is unset and the
+   * field was simply marked required without a default value, throws an
+   * exception.
+   *
+   * Only required fields can use this method.
+   */
+  def get[R >: Reqd](implicit ev: R =:= MustExist): T
 }
 
-abstract class ValueContainer[T, Reqd <: MaybeExists, Ext <: Extension[T]]
-    extends ExtendableValueContainer[T, Ext] {
-  // Only required fields can use this method.
-  def get(implicit ev: Reqd =:= MustExist): T
-}
-
+// This is the sole concrete implementation of ValueContainer. It should not be
+// extended or directly constructed except by FieldDescriptor.
 private[meadow] final class ConcreteValueContainer[T, Reqd <: MaybeExists, Ext <: Extension[T]](
     override val descriptor: FieldDescriptor[T, Reqd, Ext],
     initFrom: Option[T],
-    extensionCreator: ExtendableValueContainer[T, Ext] => Ext,
+    extensionCreator: ValueContainer[T, MaybeExists, Ext] => Ext,
     behaviorWhenUnset: Option[UnsetBehavior[T]]) extends ValueContainer[T, Reqd, Ext] {
   private var _origValueOpt: Option[T] = initFrom
   private var _valueOpt: Option[T] = initFrom
@@ -86,7 +123,7 @@ private[meadow] final class ConcreteValueContainer[T, Reqd <: MaybeExists, Ext <
   override def serialize: Option[PhysicalType] = _valueOpt.map(descriptor.serializer.serialize _)
 
   // Only required fields can use this method.
-  override def get(implicit ev: Reqd =:= MustExist): T = {
+  override def get[R >: Reqd](implicit ev: R =:= MustExist): T = {
     // behaviorWhenUnset must be defined for any MustExist containers
     behaviorWhenUnset.get.onGet(_valueOpt)
   }

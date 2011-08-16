@@ -8,6 +8,14 @@ import org.bson.types.{BSONTimestamp, BasicBSONList, ObjectId}
 import org.bson.BSONObject
 import org.joda.time.DateTime
 
+/**
+ * PhysicalType models the possible types that can be returned from Mongo or
+ * passed to Mongo. The main advantage of using this set of case classes is
+ * that BSONObject and its associated hierarchy are difficult to work with, and
+ * return AnyRef's which then need to be matched by type. The use of
+ * PhysicalType, including the apply method on its companion object, means that
+ * this matching only has to happen here.
+ */
 abstract class PhysicalType {
   val v: Any
 }

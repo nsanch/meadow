@@ -8,7 +8,7 @@ object TestEnum extends Enumeration {
   val Two = Value("two")
 }
 
-class CustomExtension(vc: ExtendableValueContainer[String, CustomExtension]) extends Extension[String] {
+class CustomExtension(vc: ValueContainer[String, _, CustomExtension]) extends Extension[String] {
   def someCustomMethod = "whee " + vc.getOpt
 }
 

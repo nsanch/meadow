@@ -11,20 +11,27 @@ import org.joda.time.DateTime
 
 // TODO(nsanch): should all/some of these parse NullWrapper?
 
+/**
+ * Serializer's model the transformation of a PhysicalType to a logical type
+ * and vice versa. Subclasses must implement a serialize method to transform a
+ * given logical type into a PhysicalType, and parsePhysicalRep to parse a
+ * PhysicalType into a logical type. If either transformation isn't possible,
+ * an exception will be raised, as the alternative is likely data-loss.
+ */
 abstract class Serializer[T] extends Loggable {
   def deserialize(any: PhysicalType): T = {
-    val parsed = parseFromAny(any)
+    val parsed = parsePhysicalRep(any)
     parsed.getOrElse {
       throw new RuntimeException("%s: Can't parse %s".format(this, any))
     }
   }
 
-  protected def parseFromAny(a: PhysicalType): Option[T]
   def serialize(t: T): PhysicalType 
+  protected def parsePhysicalRep(a: PhysicalType): Option[T]
 }
 
 case class ListSerializer[EltType](eltSerializer: Serializer[EltType]) extends Serializer[List[EltType]] {
-  protected def parseFromAny(a: PhysicalType): Option[List[EltType]] = a match {
+  protected def parsePhysicalRep(a: PhysicalType): Option[List[EltType]] = a match {
     case l: BasicBSONListWrapper => Some(
       (for (i <- 0 until l.v.size()) yield {
         eltSerializer.deserialize(PhysicalType(l.v.get(i)))
@@ -43,7 +50,7 @@ case class ListSerializer[EltType](eltSerializer: Serializer[EltType]) extends S
 }
   
 case object ObjectIdSerializer extends Serializer[ObjectId] {
-  protected def parseFromAny(a: PhysicalType): Option[ObjectId] = a match {
+  protected def parsePhysicalRep(a: PhysicalType): Option[ObjectId] = a match {
     case oid: ObjectIdWrapper => Some(oid.v)
     case s: StringWrapper if ObjectId.isValid(s.v) => Some(new ObjectId(s.v))
     case _ => None
@@ -52,7 +59,7 @@ case object ObjectIdSerializer extends Serializer[ObjectId] {
 }
 
 case object BooleanSerializer extends Serializer[Boolean] {
-  protected def parseFromAny(a: PhysicalType): Option[Boolean] = a match {
+  protected def parsePhysicalRep(a: PhysicalType): Option[Boolean] = a match {
     case b: BooleanWrapper => Some(b.v)
     case _ => None
   }
@@ -60,7 +67,7 @@ case object BooleanSerializer extends Serializer[Boolean] {
 }
 
 case object IntSerializer extends Serializer[Int] {
-  protected def parseFromAny(a: PhysicalType): Option[Int] = a match {
+  protected def parsePhysicalRep(a: PhysicalType): Option[Int] = a match {
     case i: IntWrapper => Some(i.v)
     case _ => None
   }
@@ -68,7 +75,7 @@ case object IntSerializer extends Serializer[Int] {
 }
 
 case object LongSerializer extends Serializer[Long] {
-  protected def parseFromAny(a: PhysicalType): Option[Long] = a match {
+  protected def parsePhysicalRep(a: PhysicalType): Option[Long] = a match {
     case l: LongWrapper => Some(l.v)
     case i: IntWrapper => Some(i.v: Long)
     case _ => None
@@ -77,7 +84,7 @@ case object LongSerializer extends Serializer[Long] {
 }
 
 case object DoubleSerializer extends Serializer[Double] {
-  protected def parseFromAny(a: PhysicalType): Option[Double] = a match {
+  protected def parsePhysicalRep(a: PhysicalType): Option[Double] = a match {
     case d: DoubleWrapper => Some(d.v)
     case l: LongWrapper => Some(l.v: Double)
     case i: IntWrapper => Some(i.v: Double)
@@ -87,7 +94,7 @@ case object DoubleSerializer extends Serializer[Double] {
 }
 
 case object StringSerializer extends Serializer[String] {
-  protected def parseFromAny(a: PhysicalType) = a match {
+  protected def parsePhysicalRep(a: PhysicalType) = a match {
     case s: StringWrapper => Some(s.v)
     case _ => None
   }
@@ -95,7 +102,7 @@ case object StringSerializer extends Serializer[String] {
 }
 
 case object DateTimeSerializer extends Serializer[DateTime] {
-  protected def parseFromAny(a: PhysicalType) = a match {
+  protected def parsePhysicalRep(a: PhysicalType) = a match {
     case d: DateWrapper => Some(new DateTime(d.v.getTime()))
     case _ => None
   }
@@ -103,18 +110,18 @@ case object DateTimeSerializer extends Serializer[DateTime] {
 }
 
 case class RecordSerializer[RecordType <: Record[IdType], IdType](recordDescriptor: Schema[RecordType, IdType]) extends Serializer[RecordType] {
-  protected def parseFromAny(a: PhysicalType): Option[RecordType] = a match {
+  protected def parsePhysicalRep(a: PhysicalType): Option[RecordType] = a match {
     case dbo: BSONObjectWrapper => Some(recordDescriptor.loadRecord(dbo.v))
     case _ => None
   }
 
   def serialize(rec: RecordType): PhysicalType = {
-    BSONObjectWrapper(recordDescriptor.serialize(rec))
+    BSONObjectWrapper(rec.serialize())
   }
 }
 
 case class MappedSerializer[T](map: Map[String, T], serializer: T => String) extends Serializer[T] {
-  protected def parseFromAny(a: PhysicalType): Option[T] = a match {
+  protected def parsePhysicalRep(a: PhysicalType): Option[T] = a match {
     case s: StringWrapper => map.get(s.v)
     case _ => None
   }

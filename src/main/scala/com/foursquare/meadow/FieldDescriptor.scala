@@ -32,7 +32,7 @@ object FieldDescriptor {
 class FieldDescriptor[T, Reqd <: MaybeExists, Ext <: Extension[T]](
     override val name: String,
     val serializer: Serializer[T],
-    val extensions: ExtendableValueContainer[T, Ext] => Ext,
+    val extensions: ValueContainer[T, MaybeExists, Ext] => Ext,
     val generatorOpt: Option[Generator[T]] = None,
     val behaviorWhenUnset: Option[UnsetBehavior[T]] = None) extends BaseFieldDescriptor {
 
@@ -109,9 +109,11 @@ class FieldDescriptor[T, Reqd <: MaybeExists, Ext <: Extension[T]](
    * Adds a typed extension to the ValueContainer.
    *
    * It is not possible to specify two extensions on one FieldDescriptor or
-   * ValueContainer.
+   * ValueContainer. Extensions are also not given any information about
+   * whether the ValueContainer is required, so they may not use its 'get'
+   * method.
    */
-  def withExtensions[NewExt <: Extension[T]](extCreator: ExtendableValueContainer[T, NewExt] => NewExt)
+  def withExtensions[NewExt <: Extension[T]](extCreator: ValueContainer[T, MaybeExists, NewExt] => NewExt)
                                              (implicit ev: Ext =:= NoExtensions[T]): FieldDescriptor[T, Reqd, NewExt] = {
     new FieldDescriptor[T, Reqd, NewExt](this.name, this.serializer, extCreator, this.generatorOpt, this.behaviorWhenUnset)
   }

@@ -6,51 +6,69 @@ import org.bson.types.ObjectId
 import org.joda.time.DateTime
 import scala.collection.mutable.ListBuffer
 
+case class MongoLocation(db: String, collection: String)
+
+/**
+ * A simple base class that doesn't need any of the type parameters that Schema
+ * does. Provides helper methods for schema construction and some basic methods
+ * for interacting with Mongo.
+ */
 abstract class BaseSchema {
-  def objectIdField(name: String) = FieldDescriptor(name, ObjectIdSerializer)
-  def booleanField(name: String) = FieldDescriptor(name, BooleanSerializer)
-  def intField(name: String) = FieldDescriptor(name, IntSerializer)
-  def longField(name: String) = FieldDescriptor(name, LongSerializer)
-  def doubleField(name: String) = FieldDescriptor(name, DoubleSerializer)
-  def stringField(name: String) = FieldDescriptor(name, StringSerializer)
-  def dateTimeField(name: String) = FieldDescriptor(name, DateTimeSerializer)
-  def listField[T](name: String, elementSerializer: Serializer[T]) = {
+  protected def objectIdField(name: String) = FieldDescriptor(name, ObjectIdSerializer)
+  protected def booleanField(name: String) = FieldDescriptor(name, BooleanSerializer)
+  protected def intField(name: String) = FieldDescriptor(name, IntSerializer)
+  protected def longField(name: String) = FieldDescriptor(name, LongSerializer)
+  protected def doubleField(name: String) = FieldDescriptor(name, DoubleSerializer)
+  protected def stringField(name: String) = FieldDescriptor(name, StringSerializer)
+  protected def dateTimeField(name: String) = FieldDescriptor(name, DateTimeSerializer)
+  protected def listField[T](name: String, elementSerializer: Serializer[T]) = {
     FieldDescriptor[List[T]](name, ListSerializer(elementSerializer))
   }
-  def recordField[R <: Record[IdType], IdType](name: String, sch: Schema[R, IdType]) = {
+  protected def recordField[R <: Record[IdType], IdType](name: String, sch: Schema[R, IdType]) = {
     FieldDescriptor[R](name, RecordSerializer(sch))
   }
 
+  // Specifies the location of this collection in mongo.
   protected def mongoLocation: MongoLocation
 
+  /**
+   * Returns the mongo DBCollection associated with this Schema.
+   */
   // TODO(nsanch): As much as possible, the mongo logic should move to another class.
   def coll(): DBCollection = MongoConnector.mongo.getDB(mongoLocation.db).getCollection(mongoLocation.collection)
-
-  def serialize(rec: Record[_]): DBObject = {
-    val res = new BasicDBObject()
-    for ((fieldDesc, container) <- rec.fields;
-         serializedField <- container.serialize) {
-      res.put(fieldDesc.name, serializedField.v) 
-    }
-    res
-  }
-
+ 
+  /**
+   * Saves the given record to mongo. 
+   */
   def save(r: Record[_]) = {
     // TODO(nsanch): is it better to do insert for new records? appears to work
     // fine either way.
-    coll().save(serialize(r), WriteConcern.NORMAL)
+    coll().save(r.serialize(), WriteConcern.NORMAL)
   }
 }
 
-case class MongoLocation(db: String, collection: String)
-
+/**
+ * Models a collection in Mongo whose primary key is of the given IdType.
+ * 
+ * Provides simple methods for creating, finding, and saving records to the
+ * modeled collection. More complicated queries and updates aren't supported,
+ * and should instead be issued via a separate library like Rogue.
+ */
 abstract class Schema[RecordType <: Record[IdType], IdType] extends BaseSchema {
   protected def createInstance(dbo: BSONObject, newRecord: Boolean): RecordType
   final def createRecord: RecordType = createInstance(new BasicDBObject(), true)
-  final def loadRecord(dbo: BSONObject): RecordType = createInstance(dbo, false)
-    
-  def findOne(id: IdType): Option[RecordType] = findAll(List(id)).headOption
 
+  private[meadow] def loadRecord(dbo: BSONObject): RecordType = createInstance(dbo, false)
+
+  /**
+   * Finds one or many instances of RecordType by ID. More complicated queries
+   * aren't supported, and should instead be issued via a separate library like
+   * Rogue.
+   *
+   * Note: you should take care to pass in a reasonably-sized list to avoid
+   * passing too large of a query to Mongo.
+   */
+  def findOne(id: IdType): Option[RecordType] = findAll(List(id)).headOption
   def findAll(ids: Traversable[IdType]): List[RecordType] = {
     if (ids.isEmpty) {
       Nil
@@ -66,11 +84,16 @@ abstract class Schema[RecordType <: Record[IdType], IdType] extends BaseSchema {
       l.result()
     }
   }
-    
+
+  /**
+   * A simple wrapper around PrimingLogic.prime that simplifies priming.
+   * Accepts a list of records that have foreign keys to RecordType, and
+   * fetches those referenced records in a batch.
+   */
   def prime[ContainingRecord <: Record[_],
             Ext <: Extension[IdType] with ForeignKeyLogic[RecordType, IdType]](
       containingRecords: List[ContainingRecord],
-      lambda: ContainingRecord => ExtendableValueContainer[IdType, Ext],
+      lambda: ContainingRecord => ValueContainer[IdType, MaybeExists, Ext],
       known: List[RecordType] = Nil): List[ContainingRecord] = {
     PrimingLogic.prime(this, containingRecords, lambda, known)
   }
