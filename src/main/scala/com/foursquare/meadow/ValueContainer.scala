@@ -89,34 +89,24 @@ abstract class ValueContainer[T, +RecordType <: BaseRecord, +Reqd <: MaybeExists
 
 // This is the sole concrete implementation of ValueContainer. It should not be
 // extended or directly constructed except by FieldDescriptor.
-private[meadow] final class ConcreteValueContainer[T, RecordType <: BaseRecord, Reqd <: MaybeExists, Ext <: Extension[T]](
+private[meadow] final class ConcreteValueContainer[T, RecordType <: Record[_], Reqd <: MaybeExists, Ext <: Extension[T]](
     override val descriptor: FieldDescriptor[T, Reqd, Ext],
     owner: RecordType,
     extensionCreator: ValueContainer[T, BaseRecord, MaybeExists, Ext] => Ext,
     behaviorWhenUnset: Option[UnsetBehavior[T]]) extends ValueContainer[T, RecordType, Reqd, Ext] {
-  private var _origValueOpt: Option[T] = None 
   private var _valueOpt: Option[T] = None
-  private var _dirty = false
 
   val ext: Ext = extensionCreator(this)
   
-  override def clearForReuse: Unit = {
-    _valueOpt = None
-    _origValueOpt = None
-    _dirty = false
-  }
+  override def clearForReuse: Unit = _valueOpt = None
 
-  override def init(initFrom: Option[T]): Unit = {
-    _valueOpt = initFrom 
-    _origValueOpt = initFrom
-    _dirty = false
-  }
+  override def init(initFrom: Option[T]): Unit = _valueOpt = initFrom
 
   override def apply(newOpt: Option[T]): RecordType = {
     if (newOpt !=? _valueOpt) {
       val oldOpt = _valueOpt
       _valueOpt = newOpt
-      _dirty = (_valueOpt !=? _origValueOpt) 
+      owner.onChange(this, oldOpt, newOpt)
       ext.onChange(oldOpt, _valueOpt)
     }
     owner
@@ -130,7 +120,7 @@ private[meadow] final class ConcreteValueContainer[T, RecordType <: BaseRecord, 
       behaviorWhenUnset.flatMap(_.onGetOpt(_valueOpt))
     }
   }
-  override def isDirty: Boolean = _dirty
+  override def isDirty: Boolean = owner.hasChange(this) 
   override def isDefined: Boolean = _valueOpt.isDefined 
 
   override def serialize: Option[PhysicalType] = _valueOpt.map(descriptor.serializer.serialize _)

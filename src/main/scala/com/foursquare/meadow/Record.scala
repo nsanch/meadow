@@ -1,8 +1,9 @@
 package com.foursquare.meadow
 
+import com.foursquare.meadow.Implicits._
 import org.bson.BSONObject
 import com.mongodb.{BasicDBObject, DBObject}
-import scala.collection.mutable.MutableList
+import scala.collection.mutable.{MutableList, ListMap}
 
 case class DescriptorValuePair[T, Reqd <: MaybeExists, Ext <: Extension[T]](
     fd: FieldDescriptor[T, Reqd, Ext],
@@ -23,6 +24,24 @@ case class DescriptorValuePair[T, Reqd <: MaybeExists, Ext <: Extension[T]](
   def serializeInto(dbo: BasicDBObject): Unit = {
     vc.serialize.foreach(serializedField => dbo.put(fd.name, serializedField.v))
   }
+}      
+
+case class Delta[+T](oldOpt: Option[T], newOpt: Option[T])
+
+class ChangeLog {
+  private var changes = new ListMap[Any, Delta[Any]]
+
+  def addChange[T](key: Any, change: Delta[T]) = synchronized {
+    val oldDeltaOpt = changes.get(key)
+    oldDeltaOpt.map(oldDelta => {
+      if (oldDelta.oldOpt =? change.newOpt) {
+        changes.remove(key)
+      } else {   
+        changes.put(key, Delta[T](oldDelta.oldOpt.asInstanceOf[Option[T]], change.newOpt))
+      }
+    }).getOrElse(changes.put(key, change))
+  }
+  def hasChange(key: Any) = synchronized { changes.contains(key) }
 }
 
 trait FieldCreationMethods {
@@ -55,7 +74,16 @@ abstract class Record[IdType] extends BaseRecord with FieldCreationMethods {
   def id: IdType
   def schema: BaseSchema
   private var fields: MutableList[DescriptorValuePair[_, _, _]] = new MutableList() 
-  
+  private var changelog: Option[ChangeLog] = None 
+
+  def onChange[T](vc: ValueContainer[T, _, _, _], oldOpt: Option[T], newOpt: Option[T]) = synchronized {
+    if (!changelog.isDefined) {
+      changelog = Some(new ChangeLog())
+    }
+    changelog.foreach(_.addChange(vc, Delta[T](oldOpt, newOpt)))
+  }
+  def hasChange(vc: ValueContainer[_, _, _, _]) = changelog.exists(_.hasChange(vc))
+
   def init(src: BSONObject, newRecord: Boolean): Unit = {
     for (pair <- fields) {
       pair.init(src, newRecord)

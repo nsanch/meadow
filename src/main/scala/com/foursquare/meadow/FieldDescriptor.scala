@@ -39,7 +39,7 @@ class FieldDescriptor[T, Reqd <: MaybeExists, Ext <: Extension[T]](
   /**
    * Used when a ValueContainer is built from this FieldDescriptor.
    */
-  def create[RecordType <: BaseRecord, IdType](owner: RecordType): ValueContainer[T, RecordType, Reqd, Ext] = {
+  def create[RecordType <: Record[_], IdType](owner: RecordType): ValueContainer[T, RecordType, Reqd, Ext] = {
     new ConcreteValueContainer(this,
                                owner,
                                extensions,
