@@ -41,7 +41,7 @@ abstract class BaseValueContainer {
  * Exposes an Extension to provide additional functionality that is unique to
  * the given container.
  */
-abstract class ValueContainer[T, +Reqd <: MaybeExists, Ext <: Extension[T]] extends BaseValueContainer {
+abstract class ValueContainer[T, +RecordType <: BaseRecord, +Reqd <: MaybeExists, Ext <: Extension[T]] extends BaseValueContainer {
   /**
    * Initializes the container with the given field.
    */
@@ -61,14 +61,10 @@ abstract class ValueContainer[T, +Reqd <: MaybeExists, Ext <: Extension[T]] exte
   def isDefined: Boolean
   
   /**
-   * Unsets the underlying value.
-   */
-  def unset: Unit
-
-  /**
    * Sets the value to t.
    */
-  def set(t: T): Unit
+  def apply(t: Option[T]): RecordType 
+  def apply(t: T): RecordType = apply(Some(t))
 
   /**
    * Whether the underlying value has changed since the container was created.
@@ -93,10 +89,11 @@ abstract class ValueContainer[T, +Reqd <: MaybeExists, Ext <: Extension[T]] exte
 
 // This is the sole concrete implementation of ValueContainer. It should not be
 // extended or directly constructed except by FieldDescriptor.
-private[meadow] final class ConcreteValueContainer[T, Reqd <: MaybeExists, Ext <: Extension[T]](
+private[meadow] final class ConcreteValueContainer[T, RecordType <: BaseRecord, Reqd <: MaybeExists, Ext <: Extension[T]](
     override val descriptor: FieldDescriptor[T, Reqd, Ext],
-    extensionCreator: ValueContainer[T, MaybeExists, Ext] => Ext,
-    behaviorWhenUnset: Option[UnsetBehavior[T]]) extends ValueContainer[T, Reqd, Ext] {
+    owner: RecordType,
+    extensionCreator: ValueContainer[T, BaseRecord, MaybeExists, Ext] => Ext,
+    behaviorWhenUnset: Option[UnsetBehavior[T]]) extends ValueContainer[T, RecordType, Reqd, Ext] {
   private var _origValueOpt: Option[T] = None 
   private var _valueOpt: Option[T] = None
   private var _dirty = false
@@ -115,13 +112,14 @@ private[meadow] final class ConcreteValueContainer[T, Reqd <: MaybeExists, Ext <
     _dirty = false
   }
 
-  protected def set(newOpt: Option[T]): Unit = {
+  override def apply(newOpt: Option[T]): RecordType = {
     if (newOpt !=? _valueOpt) {
       val oldOpt = _valueOpt
       _valueOpt = newOpt
       _dirty = (_valueOpt !=? _origValueOpt) 
       ext.onChange(oldOpt, _valueOpt)
     }
+    owner
   }
   
   // Public interface
@@ -132,9 +130,7 @@ private[meadow] final class ConcreteValueContainer[T, Reqd <: MaybeExists, Ext <
       behaviorWhenUnset.flatMap(_.onGetOpt(_valueOpt))
     }
   }
-  override def set(t: T): Unit = set(Some(t))
   override def isDirty: Boolean = _dirty
-  override def unset: Unit = set(None)
   override def isDefined: Boolean = _valueOpt.isDefined 
 
   override def serialize: Option[PhysicalType] = _valueOpt.map(descriptor.serializer.serialize _)

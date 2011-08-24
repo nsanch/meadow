@@ -13,7 +13,7 @@ class MeadowTest {
   def customField: Unit = {
     val rec = SampleSchema.createRecord
     assertEquals(rec.custom.ext.someCustomMethod, "whee None")
-    rec.custom.set("foo")
+    rec.custom("foo")
     assertEquals(rec.custom.ext.someCustomMethod, "whee Some(foo)")
   }
 
@@ -22,7 +22,7 @@ class MeadowTest {
     val outerSample = SampleSchema.createRecord
     val innerSample = SampleSchema.createRecord
 
-    outerSample.embedded.set(innerSample)
+    outerSample.embedded(innerSample)
 
     val outerId = outerSample.id
     val innerId = innerSample.id
@@ -38,10 +38,10 @@ class MeadowTest {
     val rec = SampleSchema.createRecord
     assertEquals(rec.enum.getOpt, None)
 
-    rec.enum.set(TestEnum.Two)
+    rec.enum(TestEnum.Two)
     assertEquals(rec.enum.getOpt, Some(TestEnum.Two))
     
-    rec.enum.unset
+    rec.enum(None)
     assertEquals(rec.enum.getOpt, None)
   }
 
@@ -52,7 +52,7 @@ class MeadowTest {
 
     val sample = SampleSchema.createRecord
     val sampleId = sample.id
-    sample.refId.ext.set(ref)
+    sample.refId.ext(ref)
     assertEquals(sample.refId.getOpt, Some(refId))
 
     SampleSchema.save(sample)
@@ -69,7 +69,7 @@ class MeadowTest {
     val refId = ref.id
 
     val sample = SampleSchema.createRecord
-    sample.refId.ext.set(ref)
+    sample.refId.ext(ref)
     assertEquals(sample.refId.getOpt, Some(refId))
 
     sample.refId.ext.primeObj(ref)
@@ -85,7 +85,7 @@ class MeadowTest {
     val sample = SampleSchema.createRecord
     // This uses the ValueContainer's set() instead of the FKExtension's set()
     // because the latter set() does priming implicitly.
-    sample.refId.set(ref.id)
+    sample.refId(ref.id)
     assertEquals(sample.refId.getOpt, Some(refId))
 
     ReferencedRecordSchema.save(ref)
@@ -101,10 +101,10 @@ class MeadowTest {
          ReferencedRecordSchema.createRecord,
          ReferencedRecordSchema.createRecord)
 
-    ref1.name.set("foo")
-    ref2.name.set("bar")
-    ref3.name.set("baz")
-    ref4.name.set("boo")
+    ref1.name("foo")
+    ref2.name("bar")
+    ref3.name("baz")
+    ref4.name("boo")
     val (refId1, refId2) = (ref1.id, ref2.id)
     ReferencedRecordSchema.save(ref1)
     ReferencedRecordSchema.save(ref2)
@@ -118,15 +118,15 @@ class MeadowTest {
          SampleSchema.createRecord,
          SampleSchema.createRecord)
 
-    sample1.refId.set(refId1)
-    sample2.refId.set(refId1)
-    sample3.refId.set(refId2)
+    sample1.refId(refId1)
+    sample2.refId(refId1)
+    sample3.refId(refId2)
     // sample4 left empty
     // sample5 is primed ahead of time with ref3, which doesn't exist in the db.
-    sample5.refId.ext.set(ref3)
+    sample5.refId.ext(ref3)
     // sample6 points at ref4, which wasn't persisted, so it can only come from
     // the list of known records we pass to prime.
-    sample6.refId.set(ref4.id)
+    sample6.refId(ref4.id)
 
     ReferencedRecordSchema.prime(List(sample1, sample2, sample3, sample4, sample5),
                                      (s: Sample) => s.refId,

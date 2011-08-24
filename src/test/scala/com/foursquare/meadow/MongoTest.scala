@@ -10,7 +10,7 @@ class MongoTest {
   def testSaveAndLoad: Unit = {
     val created = SampleSchema.createRecord
     val createdId = created._id.get
-    created.int.set(77)
+    created.int(77)
 
     SampleSchema.save(created)
 

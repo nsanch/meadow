@@ -129,14 +129,14 @@ class SerializerTest {
   def testRecord: Unit = {
     val sampleS = RecordSerializer(SampleSchema)
     val sample = SampleSchema.createRecord
-    sample.int.set(1)
-    sample.long.set(2L)
-    sample.string.set("outer")
-    sample.double.set(3.0)
-    sample.enum.set(TestEnum.One)
+    sample.int(1)
+          .long(2L)
+          .string("outer")
+          .double(3.0)
+          .enum(TestEnum.One)
     val innerSample = SampleSchema.createRecord
-    innerSample.string.set("inner")
-    sample.embedded.set(innerSample)
+    innerSample.string("inner")
+    sample.embedded(innerSample)
 
     val innerMap = new java.util.HashMap[String, Any]()
     innerMap.put("string", "inner")

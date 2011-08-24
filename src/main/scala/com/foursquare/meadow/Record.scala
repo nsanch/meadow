@@ -4,7 +4,9 @@ import org.bson.BSONObject
 import com.mongodb.{BasicDBObject, DBObject}
 import scala.collection.mutable.MutableList
 
-case class DescriptorValuePair[T, Reqd <: MaybeExists, Ext <: Extension[T]](fd: FieldDescriptor[T, Reqd, Ext], vc: ValueContainer[T, Reqd, Ext]) {
+case class DescriptorValuePair[T, Reqd <: MaybeExists, Ext <: Extension[T]](
+    fd: FieldDescriptor[T, Reqd, Ext],
+    vc: ValueContainer[T, BaseRecord, Reqd, Ext]) {
   def init(src: BSONObject, newRecord: Boolean): Unit = {
     if (!newRecord) {
       if (src.containsField(fd.name)) {
@@ -14,7 +16,7 @@ case class DescriptorValuePair[T, Reqd <: MaybeExists, Ext <: Extension[T]](fd: 
       }
     } else {
       vc.init(None)
-      fd.generatorOpt.map(g => vc.set(g.generate()))
+      fd.generatorOpt.map(g => vc(g.generate()))
     }
   }
 
@@ -22,6 +24,8 @@ case class DescriptorValuePair[T, Reqd <: MaybeExists, Ext <: Extension[T]](fd: 
     vc.serialize.foreach(serializedField => dbo.put(fd.name, serializedField.v))
   }
 }
+
+abstract class BaseRecord
 
 /**
  * A base record type to be instantiated for newly created or loaded records.
@@ -31,7 +35,7 @@ case class DescriptorValuePair[T, Reqd <: MaybeExists, Ext <: Extension[T]](fd: 
  * The IdType type-parameter dictates the type of the primary key of this
  * record. It may be an ObjectId, a Long, or another Record.
  */
-abstract class Record[IdType] {
+abstract class Record[IdType] extends BaseRecord {
   def id: IdType
   def schema: BaseSchema
   private var fields: MutableList[DescriptorValuePair[_, _, _]] = new MutableList() 
@@ -71,10 +75,11 @@ abstract class Record[IdType] {
     res
   }
 
-  def build[T, Reqd <: MaybeExists, Ext <: Extension[T]](
-      name: String, fdCreator: String => FieldDescriptor[T, Reqd, Ext]): ValueContainer[T, Reqd, Ext] = {
+  def build[T, Reqd <: MaybeExists, Ext <: Extension[T], RecordType <: Record[_]](
+      name: String, fdCreator: String => FieldDescriptor[T, Reqd, Ext], rec: RecordType): ValueContainer[T, RecordType, Reqd, Ext] = {
+    assert(this == rec)
     val fd = schema.getOrCreateFD(name, fdCreator)
-    val container = fd.create()
+    val container = fd.create(rec)
     fields += DescriptorValuePair[T, Reqd, Ext](fd, container)
     container
   }

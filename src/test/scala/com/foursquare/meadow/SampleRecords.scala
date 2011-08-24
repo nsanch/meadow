@@ -8,7 +8,7 @@ object TestEnum extends Enumeration {
   val Two = Value("two")
 }
 
-class CustomExtension(vc: ValueContainer[String, _, CustomExtension]) extends Extension[String] {
+class CustomExtension(vc: ValueContainer[String, _, _, CustomExtension]) extends Extension[String] {
   def someCustomMethod = "whee " + vc.getOpt
 }
 
@@ -21,8 +21,8 @@ class ReferencedRecord extends Record[ObjectId] {
   override def id = _id.get
   override def schema = ReferencedRecordSchema
 
-  val _id = build("_id", name => objectIdField(name).required_!().withGenerator(ObjectIdGenerator))
-  val name = build("name", name => stringField(name))
+  val _id = build("_id", name => objectIdField(name).required_!().withGenerator(ObjectIdGenerator), this)
+  val name = build("name", name => stringField(name), this)
 }
 
 
@@ -30,15 +30,15 @@ class Sample extends Record[ObjectId] {
   override def id = _id.get
   override def schema = SampleSchema
 
-  val _id = build("_id", name => objectIdField(name).required_!().withGenerator(ObjectIdGenerator))
-  val int = build("int", name => intField(name))
-  val long = build("long", name => longField(name))
-  val string = build("string", name => stringField(name))
-  val double = build("double", name => doubleField(name))
-  val embedded = build("embedded", name => recordField(name, SampleSchema))
-  val enum = build("enum", name => FieldDescriptor[TestEnum.Value](name, MappedSerializer(TestEnum.values.toList.map(v => (v.toString, v)).toMap, _.toString)))
-  val custom = build("custom", name => stringField(name).withExtensions[CustomExtension](vc => new CustomExtension(vc)))
-  val refId = build("refId", name => objectIdField(name).withFKExtensions(ReferencedRecordSchema))
+  val _id = build("_id", name => objectIdField(name).required_!().withGenerator(ObjectIdGenerator), this)
+  val int = build("int", name => intField(name), this)
+  val long = build("long", name => longField(name), this)
+  val string = build("string", name => stringField(name), this)
+  val double = build("double", name => doubleField(name), this)
+  val embedded = build("embedded", name => recordField(name, SampleSchema), this)
+  val enum = build("enum", name => FieldDescriptor[TestEnum.Value](name, MappedSerializer(TestEnum.values.toList.map(v => (v.toString, v)).toMap, _.toString)), this)
+  val custom = build("custom", name => stringField(name).withExtensions[CustomExtension](vc => new CustomExtension(vc)), this)
+  val refId = build("refId", name => objectIdField(name).withFKExtensions(ReferencedRecordSchema), this)
 }
 
 object SampleSchema extends Schema[Sample, ObjectId] {
@@ -57,7 +57,7 @@ class FreelistedRec extends Record[ObjectId] {
   override def id = _id.get
   override def schema = FreelistedRecSchema
 
-  val _id = build("_id", name => objectIdField(name).required_!().withGenerator(ObjectIdGenerator))
-  val int = build("int", name => intField(name))
-  val long = build("long", name => longField(name))
+  val _id = build("_id", name => objectIdField(name).required_!().withGenerator(ObjectIdGenerator), this)
+  val int = build("int", name => intField(name), this)
+  val long = build("long", name => longField(name), this)
 }

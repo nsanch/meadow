@@ -32,15 +32,16 @@ object FieldDescriptor {
 class FieldDescriptor[T, Reqd <: MaybeExists, Ext <: Extension[T]](
     override val name: String,
     val serializer: Serializer[T],
-    val extensions: ValueContainer[T, MaybeExists, Ext] => Ext,
+    val extensions: ValueContainer[T, BaseRecord, MaybeExists, Ext] => Ext,
     val generatorOpt: Option[Generator[T]] = None,
     val behaviorWhenUnset: Option[UnsetBehavior[T]] = None) extends BaseFieldDescriptor {
 
   /**
    * Used when a ValueContainer is built from this FieldDescriptor.
    */
-  def create(): ValueContainer[T, Reqd, Ext] = {
+  def create[RecordType <: BaseRecord, IdType](owner: RecordType): ValueContainer[T, RecordType, Reqd, Ext] = {
     new ConcreteValueContainer(this,
+                               owner,
                                extensions,
                                behaviorWhenUnset)
   }
@@ -90,7 +91,7 @@ class FieldDescriptor[T, Reqd <: MaybeExists, Ext <: Extension[T]](
    * whether the ValueContainer is required, so they may not use its 'get'
    * method.
    */
-  def withExtensions[NewExt <: Extension[T]](extCreator: ValueContainer[T, MaybeExists, NewExt] => NewExt)
+  def withExtensions[NewExt <: Extension[T]](extCreator: ValueContainer[T, BaseRecord, MaybeExists, NewExt] => NewExt)
                                              (implicit ev: Ext =:= NoExtensions[T]): FieldDescriptor[T, Reqd, NewExt] = {
     new FieldDescriptor[T, Reqd, NewExt](this.name, this.serializer, extCreator, this.generatorOpt, this.behaviorWhenUnset)
   }
@@ -99,8 +100,8 @@ class FieldDescriptor[T, Reqd <: MaybeExists, Ext <: Extension[T]](
    * A helper method to specify that a field should use a foreign key extension
    * pointing at the given Schema.
    */
-  def withFKExtensions[RecordType <: Record[T]](desc: Schema[RecordType, T])
-                                               (implicit ev: Ext =:= NoExtensions[T]): FieldDescriptor[T, Reqd, FKExtension[RecordType, T]] = {
-    withExtensions[FKExtension[RecordType, T]](vc => new FKExtension(vc, desc))
+  def withFKExtensions[RefRecordType <: Record[T]](desc: Schema[RefRecordType, T])
+                                                  (implicit ev: Ext =:= NoExtensions[T]): FieldDescriptor[T, Reqd, FKExtension[RefRecordType, T]] = {
+    withExtensions[FKExtension[RefRecordType, T]](vc => new FKExtension(vc, desc))
   }
 }

@@ -9,7 +9,7 @@ class ReuseTest {
   @Test
   def verifyCleared: Unit = {
     val sample = SampleSchema.createRecord
-    sample.int.set(1)
+    sample.int(1)
     val firstId = sample._id.get
     SampleSchema.save(sample) 
 

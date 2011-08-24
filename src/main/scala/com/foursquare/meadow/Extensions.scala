@@ -26,7 +26,7 @@ case class NoExtensions[T]() extends Extension[T]
 trait ForeignKeyLogic[R <: Record[IdType], IdType] {
   self: Extension[IdType] =>
 
-  protected def vc: ValueContainer[IdType, _, FKExtension[R, IdType]]
+  protected def vc: ValueContainer[IdType, BaseRecord, _, FKExtension[R, IdType]]
   protected def descriptor: Schema[R, IdType]
 
   private var _primedObj: Option[R] = None
@@ -41,8 +41,8 @@ trait ForeignKeyLogic[R <: Record[IdType], IdType] {
    * Type-safe setter that calls the underlying ValueContainer with the
    * record's id and automatically primes the cached value.
    */
-  def set(obj: R) = {
-    vc.set(obj.id)
+  def apply(obj: R) = {
+    vc(obj.id)
     primeObj(obj)
   }
 
@@ -92,7 +92,7 @@ trait ForeignKeyLogic[R <: Record[IdType], IdType] {
   def isPrimed: Boolean = _isPrimed
 }
 
-class FKExtension[R <: Record[IdType], IdType](override val vc: ValueContainer[IdType, MaybeExists, FKExtension[R, IdType]],
+class FKExtension[R <: Record[IdType], IdType](override val vc: ValueContainer[IdType, BaseRecord, MaybeExists, FKExtension[R, IdType]],
                                                override val descriptor: Schema[R, IdType])
   extends Extension[IdType] with ForeignKeyLogic[R, IdType]
 
@@ -112,7 +112,7 @@ object PrimingLogic {
             Ext <: Extension[IdType] with ForeignKeyLogic[ReferencedRecord, IdType]](
       referencedDescriptor: Schema[ReferencedRecord, IdType],
       containingRecords: List[ContainingRecord],
-      lambda: ContainingRecord => ValueContainer[IdType, MaybeExists, Ext],
+      lambda: ContainingRecord => ValueContainer[IdType, ContainingRecord, MaybeExists, Ext],
       known: List[ReferencedRecord] = Nil): List[ContainingRecord] = {
  
     val (primedRecords, unprimedRecords) = containingRecords.partition(cr => !lambda(cr).isDefined || lambda(cr).ext.isPrimed)

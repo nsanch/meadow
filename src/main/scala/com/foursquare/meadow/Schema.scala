@@ -104,7 +104,7 @@ abstract class Schema[RecordType <: Record[IdType], IdType] extends BaseSchema {
   def prime[ContainingRecord <: Record[_],
             Ext <: Extension[IdType] with ForeignKeyLogic[RecordType, IdType]](
       containingRecords: List[ContainingRecord],
-      lambda: ContainingRecord => ValueContainer[IdType, MaybeExists, Ext],
+      lambda: ContainingRecord => ValueContainer[IdType, ContainingRecord, MaybeExists, Ext],
       known: List[RecordType] = Nil): List[ContainingRecord] = {
     PrimingLogic.prime(this, containingRecords, lambda, known)
   }
