@@ -25,6 +25,22 @@ case class DescriptorValuePair[T, Reqd <: MaybeExists, Ext <: Extension[T]](
   }
 }
 
+trait FieldCreationMethods {
+  def objectIdField(name: String) = FieldDescriptor(name, ObjectIdSerializer)
+  def booleanField(name: String) = FieldDescriptor(name, BooleanSerializer)
+  def intField(name: String) = FieldDescriptor(name, IntSerializer)
+  def longField(name: String) = FieldDescriptor(name, LongSerializer)
+  def doubleField(name: String) = FieldDescriptor(name, DoubleSerializer)
+  def stringField(name: String) = FieldDescriptor(name, StringSerializer)
+  def dateTimeField(name: String) = FieldDescriptor(name, DateTimeSerializer)
+  def listField[T](name: String, elementSerializer: Serializer[T]) = {
+    FieldDescriptor[List[T]](name, ListSerializer(elementSerializer))
+  }
+  def recordField[R <: Record[IdType], IdType](name: String, sch: Schema[R, IdType]) = {
+    FieldDescriptor[R](name, RecordSerializer(sch))
+  }
+}
+
 abstract class BaseRecord
 
 /**
@@ -35,25 +51,11 @@ abstract class BaseRecord
  * The IdType type-parameter dictates the type of the primary key of this
  * record. It may be an ObjectId, a Long, or another Record.
  */
-abstract class Record[IdType] extends BaseRecord {
+abstract class Record[IdType] extends BaseRecord with FieldCreationMethods {
   def id: IdType
   def schema: BaseSchema
   private var fields: MutableList[DescriptorValuePair[_, _, _]] = new MutableList() 
   
-  protected def objectIdField(name: String) = FieldDescriptor(name, ObjectIdSerializer)
-  protected def booleanField(name: String) = FieldDescriptor(name, BooleanSerializer)
-  protected def intField(name: String) = FieldDescriptor(name, IntSerializer)
-  protected def longField(name: String) = FieldDescriptor(name, LongSerializer)
-  protected def doubleField(name: String) = FieldDescriptor(name, DoubleSerializer)
-  protected def stringField(name: String) = FieldDescriptor(name, StringSerializer)
-  protected def dateTimeField(name: String) = FieldDescriptor(name, DateTimeSerializer)
-  protected def listField[T](name: String, elementSerializer: Serializer[T]) = {
-    FieldDescriptor[List[T]](name, ListSerializer(elementSerializer))
-  }
-  protected def recordField[R <: Record[IdType], IdType](name: String, sch: Schema[R, IdType]) = {
-    FieldDescriptor[R](name, RecordSerializer(sch))
-  }
-
   def init(src: BSONObject, newRecord: Boolean): Unit = {
     for (pair <- fields) {
       pair.init(src, newRecord)
