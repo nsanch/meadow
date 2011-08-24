@@ -98,9 +98,15 @@ private[meadow] final class ConcreteValueContainer[T, RecordType <: Record[_], R
 
   val ext: Ext = extensionCreator(this)
   
-  override def clearForReuse: Unit = _valueOpt = None
+  override def clearForReuse: Unit = {
+    _valueOpt = None
+    ext.clearForReuse
+  }
 
-  override def init(initFrom: Option[T]): Unit = _valueOpt = initFrom
+  override def init(initFrom: Option[T]): Unit = {
+    _valueOpt = initFrom
+    ext.init
+  }
 
   override def apply(newOpt: Option[T]): RecordType = {
     if (newOpt !=? _valueOpt) {

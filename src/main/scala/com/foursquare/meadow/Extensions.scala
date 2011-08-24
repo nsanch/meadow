@@ -13,6 +13,9 @@ trait Extension[T] {
    * already had. 
    */
   def onChange(oldVal: Option[T], newVal: Option[T]): Unit = ()
+
+  def init: Unit = {}
+  def clearForReuse: Unit = {}
 }
 case class NoExtensions[T]() extends Extension[T]
 
@@ -33,6 +36,10 @@ trait ForeignKeyLogic[R <: Record[IdType], IdType] {
   private var _isPrimed: Boolean = false
 
   override def onChange(old: Option[IdType], newVal: Option[IdType]) = {
+    _primedObj = None
+    _isPrimed = false
+  }
+  override def clearForReuse: Unit = {
     _primedObj = None
     _isPrimed = false
   }
