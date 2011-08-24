@@ -33,6 +33,7 @@ case class DescriptorValuePair[T, Reqd <: MaybeExists, Ext <: Extension[T]](fd: 
  */
 abstract class Record[IdType] {
   def id: IdType
+  def schema: BaseSchema
   private var fields: MutableList[DescriptorValuePair[_, _, _]] = new MutableList() 
   
   protected def objectIdField(name: String) = FieldDescriptor(name, ObjectIdSerializer)
@@ -70,7 +71,9 @@ abstract class Record[IdType] {
     res
   }
 
-  def build[T, Reqd <: MaybeExists, Ext <: Extension[T]](fd: FieldDescriptor[T, Reqd, Ext]): ValueContainer[T, Reqd, Ext] = {
+  def build[T, Reqd <: MaybeExists, Ext <: Extension[T]](
+      name: String, fdCreator: String => FieldDescriptor[T, Reqd, Ext]): ValueContainer[T, Reqd, Ext] = {
+    val fd = schema.getOrCreateFD(name, fdCreator)
     val container = fd.create()
     fields += DescriptorValuePair[T, Reqd, Ext](fd, container)
     container

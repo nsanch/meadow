@@ -31,6 +31,16 @@ abstract class BaseSchema {
     // fine either way.
     coll().save(r.serialize(), WriteConcern.NORMAL)
   }
+
+  private var fieldDescriptors: Map[String, BaseFieldDescriptor] = Map()
+  def getOrCreateFD[T, Reqd <: MaybeExists, Ext <: Extension[T]](name: String, fdCreator: String => FieldDescriptor[T, Reqd, Ext]): FieldDescriptor[T, Reqd, Ext] = {
+    fieldDescriptors.get(name).map(_.asInstanceOf[FieldDescriptor[T, Reqd, Ext]]).getOrElse({
+      val fd = fdCreator(name)
+      fieldDescriptors += (name -> fd)
+      fd
+    })
+  }
+
 }
 
 /**
@@ -40,7 +50,7 @@ abstract class BaseSchema {
  * modeled collection. More complicated queries and updates aren't supported,
  * and should instead be issued via a separate library like Rogue.
  */
-abstract class Schema[RecordType <: Record[IdType], IdType](oneInstance: RecordType) extends BaseSchema {
+abstract class Schema[RecordType <: Record[IdType], IdType] extends BaseSchema {
   protected def createInstance: RecordType
   protected def allocator: RecordAllocator[RecordType] = _allocator
   private lazy val _allocator = new NormalRecordAllocator[RecordType, IdType](() => this.createInstance)
@@ -60,7 +70,7 @@ abstract class Schema[RecordType <: Record[IdType], IdType](oneInstance: RecordT
     inst.init(dbo, false)
     inst
   }
-
+  
   /**
    * Finds one or many instances of RecordType by ID. More complicated queries
    * aren't supported, and should instead be issued via a separate library like
