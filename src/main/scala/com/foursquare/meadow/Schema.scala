@@ -14,20 +14,6 @@ case class MongoLocation(db: String, collection: String)
  * for interacting with Mongo.
  */
 abstract class BaseSchema {
-  protected def objectIdField(name: String) = FieldDescriptor(name, ObjectIdSerializer)
-  protected def booleanField(name: String) = FieldDescriptor(name, BooleanSerializer)
-  protected def intField(name: String) = FieldDescriptor(name, IntSerializer)
-  protected def longField(name: String) = FieldDescriptor(name, LongSerializer)
-  protected def doubleField(name: String) = FieldDescriptor(name, DoubleSerializer)
-  protected def stringField(name: String) = FieldDescriptor(name, StringSerializer)
-  protected def dateTimeField(name: String) = FieldDescriptor(name, DateTimeSerializer)
-  protected def listField[T](name: String, elementSerializer: Serializer[T]) = {
-    FieldDescriptor[List[T]](name, ListSerializer(elementSerializer))
-  }
-  protected def recordField[R <: Record[IdType], IdType](name: String, sch: Schema[R, IdType]) = {
-    FieldDescriptor[R](name, RecordSerializer(sch))
-  }
-
   // Specifies the location of this collection in mongo.
   protected def mongoLocation: MongoLocation
 
@@ -54,16 +40,23 @@ abstract class BaseSchema {
  * modeled collection. More complicated queries and updates aren't supported,
  * and should instead be issued via a separate library like Rogue.
  */
-abstract class Schema[RecordType <: Record[IdType], IdType] extends BaseSchema {
+abstract class Schema[RecordType <: Record[IdType], IdType](oneInstance: RecordType) extends BaseSchema {
   protected def createInstance: RecordType
-  final def createRecord: RecordType = {
-    val inst = createInstance
+  protected def allocator: RecordAllocator[RecordType] = _allocator
+  private lazy val _allocator = new NormalRecordAllocator[RecordType, IdType](() => this.createInstance)
+
+  def createRecord: RecordType = {
+    val inst = allocator.construct 
     inst.init(new BasicDBObject(), true)
     inst
   }
 
+  def releaseRecord(rec: RecordType) = {
+    allocator.destroy(rec)
+  }
+
   private[meadow] def loadRecord(dbo: BSONObject): RecordType = {
-    val inst = createInstance
+    val inst = allocator.construct 
     inst.init(dbo, false)
     inst
   }

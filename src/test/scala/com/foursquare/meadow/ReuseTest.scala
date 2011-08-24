@@ -11,7 +11,7 @@ class ReuseTest {
     val sample = SampleSchema.createRecord
     sample.int.set(1)
     val firstId = sample._id.get
-    sample.save
+    SampleSchema.save(sample) 
 
     sample.clearForReuse
 
@@ -22,5 +22,15 @@ class ReuseTest {
     sample.init(new BasicDBObject, true)
     val secondId = sample._id.get
     assertFalse(firstId =? secondId)
+  }
+
+
+  @Test
+  def testFreelist: Unit = {
+    val first = FreelistedRecSchema.createRecord
+    FreelistedRecSchema.releaseRecord(first)
+    val second = FreelistedRecSchema.createRecord
+    
+    assertSame(first, second)
   }
 }

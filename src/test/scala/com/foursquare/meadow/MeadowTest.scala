@@ -27,7 +27,7 @@ class MeadowTest {
     val outerId = outerSample.id
     val innerId = innerSample.id
 
-    outerSample.save
+    SampleSchema.save(outerSample)
 
     val outerSample2 = SampleSchema.findOne(outerId).get
     assertEquals(outerSample2.embedded.getOpt.get.id, innerId)
@@ -55,8 +55,8 @@ class MeadowTest {
     sample.refId.ext.set(ref)
     assertEquals(sample.refId.getOpt, Some(refId))
 
-    sample.save
-    ref.save
+    SampleSchema.save(sample)
+    ReferencedRecordSchema.save(ref)
     
     val sample2 = SampleSchema.findOne(sampleId).get
     assertEquals(sample2.refId.ext.fetchObj.get.id, refId)
@@ -88,7 +88,7 @@ class MeadowTest {
     sample.refId.set(ref.id)
     assertEquals(sample.refId.getOpt, Some(refId))
 
-    ref.save
+    ReferencedRecordSchema.save(ref)
     // This should throw even through the object exists.
     sample.refId.ext.primedObj.get
   }
@@ -106,8 +106,8 @@ class MeadowTest {
     ref3.name.set("baz")
     ref4.name.set("boo")
     val (refId1, refId2) = (ref1.id, ref2.id)
-    ref1.save
-    ref2.save
+    ReferencedRecordSchema.save(ref1)
+    ReferencedRecordSchema.save(ref2)
     // don't save ref3 or ref4 to be sure that a fetch for them would fail.
 
     val (sample1, sample2, sample3, sample4, sample5, sample6) = 

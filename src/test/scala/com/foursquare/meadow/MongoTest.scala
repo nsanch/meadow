@@ -12,7 +12,7 @@ class MongoTest {
     val createdId = created._id.get
     created.int.set(77)
 
-    created.save
+    SampleSchema.save(created)
 
     val foundSampleOpt = SampleSchema.findOne(createdId)
     val foundSample = foundSampleOpt.get

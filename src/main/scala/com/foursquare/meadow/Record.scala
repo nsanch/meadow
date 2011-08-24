@@ -33,8 +33,21 @@ case class DescriptorValuePair[T, Reqd <: MaybeExists, Ext <: Extension[T]](fd: 
  */
 abstract class Record[IdType] {
   def id: IdType
-  def schema: BaseSchema
   private var fields: MutableList[DescriptorValuePair[_, _, _]] = new MutableList() 
+  
+  protected def objectIdField(name: String) = FieldDescriptor(name, ObjectIdSerializer)
+  protected def booleanField(name: String) = FieldDescriptor(name, BooleanSerializer)
+  protected def intField(name: String) = FieldDescriptor(name, IntSerializer)
+  protected def longField(name: String) = FieldDescriptor(name, LongSerializer)
+  protected def doubleField(name: String) = FieldDescriptor(name, DoubleSerializer)
+  protected def stringField(name: String) = FieldDescriptor(name, StringSerializer)
+  protected def dateTimeField(name: String) = FieldDescriptor(name, DateTimeSerializer)
+  protected def listField[T](name: String, elementSerializer: Serializer[T]) = {
+    FieldDescriptor[List[T]](name, ListSerializer(elementSerializer))
+  }
+  protected def recordField[R <: Record[IdType], IdType](name: String, sch: Schema[R, IdType]) = {
+    FieldDescriptor[R](name, RecordSerializer(sch))
+  }
 
   def init(src: BSONObject, newRecord: Boolean): Unit = {
     for (pair <- fields) {
@@ -61,9 +74,5 @@ abstract class Record[IdType] {
     val container = fd.create()
     fields += DescriptorValuePair[T, Reqd, Ext](fd, container)
     container
-  }
-
-  def save = synchronized {
-    schema.save(this)
   }
 }
