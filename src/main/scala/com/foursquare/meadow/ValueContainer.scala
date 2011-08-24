@@ -32,6 +32,7 @@ abstract class BaseValueContainer {
   def isDefined: Boolean
   def descriptor: BaseFieldDescriptor
   def serialize: Option[PhysicalType]
+  def clearForReuse: Unit
 }
   
 /**
@@ -41,6 +42,11 @@ abstract class BaseValueContainer {
  * the given container.
  */
 abstract class ValueContainer[T, +Reqd <: MaybeExists, Ext <: Extension[T]] extends BaseValueContainer {
+  /**
+   * Initializes the container with the given field.
+   */
+  def init(initFrom: Option[T]): Unit
+
   /**
    * Returns the underlying value as a Some if it exists. If the value wasn't
    * set and a default value was specified during creation of the
@@ -89,14 +95,25 @@ abstract class ValueContainer[T, +Reqd <: MaybeExists, Ext <: Extension[T]] exte
 // extended or directly constructed except by FieldDescriptor.
 private[meadow] final class ConcreteValueContainer[T, Reqd <: MaybeExists, Ext <: Extension[T]](
     override val descriptor: FieldDescriptor[T, Reqd, Ext],
-    initFrom: Option[T],
     extensionCreator: ValueContainer[T, MaybeExists, Ext] => Ext,
     behaviorWhenUnset: Option[UnsetBehavior[T]]) extends ValueContainer[T, Reqd, Ext] {
-  private var _origValueOpt: Option[T] = initFrom
-  private var _valueOpt: Option[T] = initFrom
+  private var _origValueOpt: Option[T] = None 
+  private var _valueOpt: Option[T] = None
   private var _dirty = false
 
   val ext: Ext = extensionCreator(this)
+  
+  override def clearForReuse: Unit = {
+    _valueOpt = None
+    _origValueOpt = None
+    _dirty = false
+  }
+
+  override def init(initFrom: Option[T]): Unit = {
+    _valueOpt = initFrom 
+    _origValueOpt = initFrom
+    _dirty = false
+  }
 
   protected def set(newOpt: Option[T]): Unit = {
     if (newOpt !=? _valueOpt) {

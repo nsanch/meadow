@@ -13,14 +13,14 @@ class CustomExtension(vc: ValueContainer[String, _, CustomExtension]) extends Ex
 }
 
 object ReferencedRecordSchema extends Schema[ReferencedRecord, ObjectId] {
-  override protected def createInstance(dbo: BSONObject, newRecord: Boolean) = new ReferencedRecord(dbo, newRecord)
-  override protected def mongoLocation = MongoLocation("test", "ref")
+  override protected def createInstance = new ReferencedRecord
+  override protected def mongoLocation = MongoLocation("meadow-test", "ref")
 
   val _id = objectIdField("_id").required_!().withGenerator(ObjectIdGenerator)
   val name = stringField("name")
 }
 
-class ReferencedRecord protected(dbo: BSONObject, newRecord: Boolean) extends Record[ObjectId](dbo, newRecord) {
+class ReferencedRecord extends Record[ObjectId] {
   override val schema = ReferencedRecordSchema
   override def id = _id.get
 
@@ -30,8 +30,8 @@ class ReferencedRecord protected(dbo: BSONObject, newRecord: Boolean) extends Re
 
 
 object SampleSchema extends Schema[Sample, ObjectId] {
-  override protected def createInstance(dbo: BSONObject, newRecord: Boolean) = new Sample(dbo, newRecord)
-  override protected def mongoLocation = MongoLocation("test", "sample")
+  override protected def createInstance = new Sample
+  override protected def mongoLocation = MongoLocation("meadow-test", "sample")
 
   val _id = objectIdField("_id").required_!().withGenerator(ObjectIdGenerator)
   val int = intField("int")
@@ -44,8 +44,7 @@ object SampleSchema extends Schema[Sample, ObjectId] {
   val refId = objectIdField("refId").withFKExtensions(ReferencedRecordSchema)
 }
 
-class Sample protected(dbo: BSONObject, newRecord: Boolean)
-    extends Record[ObjectId](dbo, newRecord) {
+class Sample extends Record[ObjectId] {
   override val schema = SampleSchema
   override def id = _id.get
 

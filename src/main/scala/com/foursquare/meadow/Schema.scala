@@ -55,10 +55,18 @@ abstract class BaseSchema {
  * and should instead be issued via a separate library like Rogue.
  */
 abstract class Schema[RecordType <: Record[IdType], IdType] extends BaseSchema {
-  protected def createInstance(dbo: BSONObject, newRecord: Boolean): RecordType
-  final def createRecord: RecordType = createInstance(new BasicDBObject(), true)
+  protected def createInstance: RecordType
+  final def createRecord: RecordType = {
+    val inst = createInstance
+    inst.init(new BasicDBObject(), true)
+    inst
+  }
 
-  private[meadow] def loadRecord(dbo: BSONObject): RecordType = createInstance(dbo, false)
+  private[meadow] def loadRecord(dbo: BSONObject): RecordType = {
+    val inst = createInstance
+    inst.init(dbo, false)
+    inst
+  }
 
   /**
    * Finds one or many instances of RecordType by ID. More complicated queries

@@ -37,37 +37,14 @@ class FieldDescriptor[T, Reqd <: MaybeExists, Ext <: Extension[T]](
     val behaviorWhenUnset: Option[UnsetBehavior[T]] = None) extends BaseFieldDescriptor {
 
   /**
-   * Used when a ValueContainer is built from this FieldDescriptor, given a
-   * BSONObject that may or may not have a key for this data under
-   * <code>name</code>.
+   * Used when a ValueContainer is built from this FieldDescriptor.
    */
-  def extractFrom(src: BSONObject): ValueContainer[T, Reqd, Ext] = {
-    val value = (
-      if (src.containsField(name)) {
-        Some(serializer.deserialize(PhysicalType(src.get(name))))
-      } else None
-    )
+  def create(): ValueContainer[T, Reqd, Ext] = {
     new ConcreteValueContainer(this,
-                               value,
                                extensions,
                                behaviorWhenUnset)
   }
 
-  /**
-   * Used when a ValueContainer is created for a new record. If a generator
-   * exists, this calls it to set a value.
-   */
-  def createForNewRecord(): ValueContainer[T, Reqd, Ext] = {
-    val vc = new ConcreteValueContainer(this,
-                                        None,
-                                        extensions,
-                                        behaviorWhenUnset)
-    // Do this set instead of initializing with this value because that ensures
-    // that the value will be marked dirty.
-    generatorOpt.map(g => vc.set(g.generate()))
-    vc
-  }
-  
   /**
    * Required fields have a callable <code>get</code> method that asserts that
    * the value is defined. getOpt will not do any such assertion.
