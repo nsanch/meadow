@@ -1,8 +1,8 @@
 package com.foursquare.meadow
 
-import com.mongodb.DBObject
-
 import com.foursquare.meadow.Implicits._
+import com.mongodb.DBObject
+import org.bson.BSONObject
 
 // These phantom types are used to ensure that a FieldDescriptor doesn't let
 // you specify that a field is both required and has a default value, and also
@@ -33,6 +33,7 @@ abstract class BaseValueContainer {
   def descriptor: BaseFieldDescriptor
   def serialize: Option[PhysicalType]
   def clearForReuse: Unit
+  def init(src: BSONObject, newRecord: Boolean): Unit
 }
   
 /**
@@ -94,25 +95,30 @@ private[meadow] final class ConcreteValueContainer[T, RecordType <: Record[_], R
     owner: RecordType,
     extensionCreator: ValueContainer[T, BaseRecord, MaybeExists, Ext] => Ext,
     behaviorWhenUnset: Option[UnsetBehavior[T]]) extends ValueContainer[T, RecordType, Reqd, Ext] {
+  private var _origValueOpt: Option[T] = None
   private var _valueOpt: Option[T] = None
 
   val ext: Ext = extensionCreator(this)
   
   override def clearForReuse: Unit = {
     _valueOpt = None
+    _origValueOpt = None
     ext.clearForReuse
   }
 
+  override def init(src: BSONObject, newRecord: Boolean): Unit = descriptor.init(this, src, newRecord)
   override def init(initFrom: Option[T]): Unit = {
+    owner.assertNotLocked 
+    _origValueOpt = initFrom
     _valueOpt = initFrom
     ext.init
   }
 
   override def apply(newOpt: Option[T]): RecordType = {
+    owner.assertNotLocked 
     if (newOpt !=? _valueOpt) {
       val oldOpt = _valueOpt
       _valueOpt = newOpt
-      owner.onChange(this, oldOpt, newOpt)
       ext.onChange(oldOpt, _valueOpt)
     }
     owner
@@ -120,19 +126,21 @@ private[meadow] final class ConcreteValueContainer[T, RecordType <: Record[_], R
   
   // Public interface
   override def getOpt: Option[T] = {
+    owner.assertNotLocked 
     if (_valueOpt.isDefined) {
       _valueOpt
     } else {
       behaviorWhenUnset.flatMap(_.onGetOpt(_valueOpt))
     }
   }
-  override def isDirty: Boolean = owner.hasChange(this) 
+  override def isDirty: Boolean = _origValueOpt =? _valueOpt 
   override def isDefined: Boolean = _valueOpt.isDefined 
 
   override def serialize: Option[PhysicalType] = _valueOpt.map(descriptor.serializer.serialize _)
 
   // Only required fields can use this method.
   override def get[R >: Reqd](implicit ev: R =:= MustExist): T = {
+    owner.assertNotLocked 
     // behaviorWhenUnset must be defined for any MustExist containers
     behaviorWhenUnset.get.onGet(_valueOpt)
   }

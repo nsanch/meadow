@@ -15,15 +15,20 @@ class ReuseTest {
 
     sample.clearForReuse
 
-    assertEquals(None, sample.int.getOpt)
-    assertEquals(None, sample._id.getOpt)
+    try {
+      sample.int.getOpt
+      fail("the record should be in a locked state")
+    } catch {
+      case e: LockedRecordException =>
+      case e => fail("expected LockedRecordException, got " + e)
+    }
 
     // reinit as a new record 
     sample.init(new BasicDBObject, true)
     val secondId = sample._id.get
     assertFalse(firstId =? secondId)
+    assertEquals(None, sample.int.getOpt)
   }
-
 
   @Test
   def testFreelist: Unit = {

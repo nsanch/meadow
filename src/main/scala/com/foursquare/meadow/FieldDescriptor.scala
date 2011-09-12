@@ -104,4 +104,18 @@ class FieldDescriptor[T, Reqd <: MaybeExists, Ext <: Extension[T]](
                                                   (implicit ev: Ext =:= NoExtensions[T]): FieldDescriptor[T, Reqd, FKExtension[RefRecordType, T]] = {
     withExtensions[FKExtension[RefRecordType, T]](vc => new FKExtension(vc, desc))
   }
+
+  def init(vc: ValueContainer[T, BaseRecord, Reqd, Ext], src: BSONObject, newRecord: Boolean): Unit = {
+    if (!newRecord) {
+      if (src.containsField(name)) {
+        vc.init(Some(serializer.deserialize(PhysicalType(src.get(name)))))
+      } else { 
+        vc.init(None)
+      }
+    } else {
+      vc.init(None)
+      generatorOpt.map(g => vc(g.generate()))
+    }
+  }
+
 }

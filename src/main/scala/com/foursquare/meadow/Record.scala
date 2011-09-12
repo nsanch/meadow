@@ -5,44 +5,7 @@ import org.bson.BSONObject
 import com.mongodb.{BasicDBObject, DBObject}
 import scala.collection.mutable.{MutableList, ListMap}
 
-case class DescriptorValuePair[T, Reqd <: MaybeExists, Ext <: Extension[T]](
-    fd: FieldDescriptor[T, Reqd, Ext],
-    vc: ValueContainer[T, BaseRecord, Reqd, Ext]) {
-  def init(src: BSONObject, newRecord: Boolean): Unit = {
-    if (!newRecord) {
-      if (src.containsField(fd.name)) {
-        vc.init(Some(fd.serializer.deserialize(PhysicalType(src.get(fd.name)))))
-      } else { 
-        vc.init(None)
-      }
-    } else {
-      vc.init(None)
-      fd.generatorOpt.map(g => vc(g.generate()))
-    }
-  }
-
-  def serializeInto(dbo: BasicDBObject): Unit = {
-    vc.serialize.foreach(serializedField => dbo.put(fd.name, serializedField.v))
-  }
-}      
-
-case class Delta[+T](oldOpt: Option[T], newOpt: Option[T])
-
-class ChangeLog {
-  private var changes = new ListMap[Any, Delta[Any]]
-
-  def addChange[T](key: Any, change: Delta[T]) = synchronized {
-    val oldDeltaOpt = changes.get(key)
-    oldDeltaOpt.map(oldDelta => {
-      if (oldDelta.oldOpt =? change.newOpt) {
-        changes.remove(key)
-      } else {   
-        changes.put(key, Delta[T](oldDelta.oldOpt.asInstanceOf[Option[T]], change.newOpt))
-      }
-    }).getOrElse(changes.put(key, change))
-  }
-  def hasChange(key: Any) = synchronized { changes.contains(key) }
-}
+class LockedRecordException(msg: String) extends RuntimeException(msg)
 
 trait FieldCreationMethods {
   def objectIdField(name: String) = FieldDescriptor(name, ObjectIdSerializer)
@@ -73,25 +36,25 @@ abstract class BaseRecord
 abstract class Record[IdType] extends BaseRecord with FieldCreationMethods {
   def id: IdType
   def schema: BaseSchema
-  private var fields: MutableList[DescriptorValuePair[_, _, _]] = new MutableList() 
-  private var changelog: Option[ChangeLog] = None 
-
-  def onChange[T](vc: ValueContainer[T, _, _, _], oldOpt: Option[T], newOpt: Option[T]) = synchronized {
-    if (!changelog.isDefined) {
-      changelog = Some(new ChangeLog())
-    }
-    changelog.foreach(_.addChange(vc, Delta[T](oldOpt, newOpt)))
-  }
-  def hasChange(vc: ValueContainer[_, _, _, _]) = changelog.exists(_.hasChange(vc))
+  private var fields: MutableList[ValueContainer[_, _, _, _]] = new MutableList() 
+  @volatile private var locked = true 
 
   def init(src: BSONObject, newRecord: Boolean): Unit = {
-    for (pair <- fields) {
-      pair.init(src, newRecord)
+    locked = false
+    for (vc <- fields) {
+      vc.init(src, newRecord)
     }
   }
 
   def clearForReuse: Unit = {
-    fields.foreach(pair => pair.vc.clearForReuse)
+    fields.foreach(_.clearForReuse)
+    locked = true
+  }
+
+  def assertNotLocked = {
+    if (locked) {
+      throw new LockedRecordException("Locked record cannot be accessed for reading or writing!")
+    }
   }
 
   /**
@@ -99,8 +62,8 @@ abstract class Record[IdType] extends BaseRecord with FieldCreationMethods {
    */
   def serialize(): DBObject = {
     val res = new BasicDBObject()
-    for (pair <- fields) {
-      pair.serializeInto(res)
+    for (vc <- fields) {
+      vc.serialize.foreach(serializedField => res.put(vc.descriptor.name, serializedField.v))
     }
     res
   }
@@ -110,7 +73,7 @@ abstract class Record[IdType] extends BaseRecord with FieldCreationMethods {
     assert(this == rec)
     val fd = schema.getOrCreateFD(name, fdCreator)
     val container = fd.create(rec)
-    fields += DescriptorValuePair[T, Reqd, Ext](fd, container)
+    fields += container 
     container
   }
 }
